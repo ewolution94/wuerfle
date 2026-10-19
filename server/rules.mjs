@@ -3,6 +3,10 @@
 // columns: game 1 in column 1, and so on; the match total is the sum of the games. A game is 13
 // rounds, everyone once a round in seat order; each game starts one seat further on.
 //
+// The house rule `free` (rules.free, with two games or more; the user's family plays it, 2026-10-20):
+// every column is open from the start and a box may be written in any of them. The match is then one
+// run of 13 rounds per column, in seat order from the first player, and ends with every column full.
+//
 // A turn: up to three rolls of five dice. The first rolls all five; before the second and third the
 // player keeps any dice (chosen anew each time, so a kept die may be rolled again later). After any
 // roll they fill one open box of the game's column, and after the third they must.
@@ -20,7 +24,8 @@
 //
 // Moves (plain JSON, from the page or a bot):
 //   { type: 'roll', keep?: boolean[5] }  keep is ignored on a turn's first roll
-//   { type: 'score', box }               one of BOXES, as options() allows
+//   { type: 'score', box, game? }        one of BOXES in column `game` (the current game's column when
+//                                        left out), as choices() allows
 // act() returns events, all public: everything at this table is.
 //
 // No randomness of its own (the dice come from the caller's randomInt) and no I/O: the page runs
@@ -44,7 +49,7 @@ export const BOXES = Object.freeze([...UPPER, ...LOWER]);
 export const PLAYERS = Object.freeze({ min: 1, max: 8 });
 export const GAMES = Object.freeze({ min: 1, max: 6 });
 export const VARIANTS = Object.freeze(['meister', 'basis', 'joker']);
-export const RULES = Object.freeze({ variant: 'meister' });
+export const RULES = Object.freeze({ variant: 'meister', free: false });
 
 /** Each box's highest score (what Schmidt's basic rule gives a further five-alike). */
 export const MAX = Object.freeze({
@@ -71,6 +76,10 @@ export function cleanRules(input = {}) {
   if (input.variant !== undefined) {
     if (!VARIANTS.includes(/** @type {string} */ (input.variant))) throw new RuleError('rules');
     out.variant = /** @type {'meister' | 'basis' | 'joker'} */ (input.variant);
+  }
+  if (input.free !== undefined) {
+    if (typeof input.free !== 'boolean') throw new RuleError('rules');
+    out.free = input.free;
   }
   return Object.freeze(out);
 }
@@ -119,7 +128,7 @@ export function score(box, dice) {
 }
 
 /**
- * @typedef {{ variant: 'meister' | 'basis' | 'joker' }} Rules
+ * @typedef {{ variant: 'meister' | 'basis' | 'joker', free: boolean }} Rules
  * @typedef {Record<string, number>} Column  box → points, for the boxes filled so far
  * @typedef {{
  *   rules: Rules, players: number, games: number,
@@ -202,17 +211,44 @@ export function entry(rules, column, dice) {
   return { points, extra: 0 };
 }
 
-/** The column `seat` fills now. @param {State} state @param {number} seat */
-const columnOf = (state, seat) => state.boxes[seat][state.game];
+/** Whether the house rule's any-column play is on (it needs two games or more). @param {State} state */
+export const isFree = (state) => Boolean(state.rules.free) && state.games > 1;
+
+/** The rounds the match runs in one sequence: a game's 13, or all columns' under the house rule. @param {State} state */
+export const roundsOf = (state) => (isFree(state) ? ROUNDS * state.games : ROUNDS);
 
 /**
- * What `seat` may write now, box → points under the variant; {} when it may not score now (not its
- * turn, no roll yet, the match over).
+ * The columns `seat` may write in now: the game's own, or under the house rule every column with an
+ * open box; [] when it may not score now (not its turn, no roll yet, the match over).
  * @param {State} state  @param {number} seat
  */
-export function options(state, seat) {
-  if (state.phase !== 'turn' || seat !== state.turn || state.roll === 0) return {};
-  return entry(state.rules, columnOf(state, seat), state.dice).points;
+export function writable(state, seat) {
+  if (state.phase !== 'turn' || seat !== state.turn || state.roll === 0) return [];
+  if (!isFree(state)) return [state.game];
+  return state.boxes[seat].flatMap((column, game) => (BOXES.some((b) => column[b] === undefined) ? [game] : []));
+}
+
+/**
+ * Everything `seat` may write now: { game, box, points, extra } per column and box. Under the house
+ * rule the basic rule's "cross out only when nothing fits" looks at every column.
+ * @param {State} state  @param {number} seat
+ */
+export function choices(state, seat) {
+  const all = writable(state, seat).flatMap((game) => {
+    const { points, extra } = entry(state.rules, state.boxes[seat][game], state.dice);
+    return Object.entries(points).map(([box, p]) => ({ game, box, points: p, extra }));
+  });
+  if (state.rules.variant === 'basis' && all.some((c) => c.points > 0)) return all.filter((c) => c.points > 0);
+  return all;
+}
+
+/**
+ * What `seat` may write now in one column (the current game's when left out), box → points under the
+ * variant; {} when it may not score there now.
+ * @param {State} state  @param {number} seat  @param {number} [game]
+ */
+export function options(state, seat, game = state.game) {
+  return Object.fromEntries(choices(state, seat).filter((c) => c.game === game).map((c) => [c.box, c.points]));
 }
 
 /**
@@ -226,7 +262,7 @@ export function act(state, seat, move, { randomInt } = {}) {
   if (seat !== state.turn) throw new RuleError('turn');
   if (!move || typeof move !== 'object') throw new RuleError('move');
   if (move.type === 'roll') return roll(state, seat, move.keep, randomInt);
-  if (move.type === 'score') return write(state, seat, move.box);
+  if (move.type === 'score') return write(state, seat, move.box, move.game);
   throw new RuleError('move');
 }
 
@@ -246,21 +282,27 @@ function roll(state, seat, keep, randomInt) {
   return [{ type: 'roll', seat, roll: state.roll, dice: [...state.dice], held: [...held] }];
 }
 
-/** @param {State} state @param {number} seat @param {unknown} box */
-function write(state, seat, box) {
+/** @param {State} state @param {number} seat @param {unknown} box @param {unknown} which */
+function write(state, seat, box, which) {
   if (state.roll === 0) throw new RuleError('unrolled');
   if (typeof box !== 'string' || !BOXES.includes(/** @type {Box} */ (box))) throw new RuleError('box');
-  const column = columnOf(state, seat);
+  const open = writable(state, seat);
+  // The column: the one named, else the game's own (under the house rule, the first with the box open).
+  let col = which;
+  if (col === undefined || col === null) col = isFree(state) ? (open.find((g) => state.boxes[seat][g][box] === undefined) ?? open[0]) : state.game;
+  if (!Number.isInteger(col) || !open.includes(/** @type {number} */ (col))) throw new RuleError('column');
+  const g = /** @type {number} */ (col);
+  const column = state.boxes[seat][g];
   if (column[box] !== undefined) throw new RuleError('taken');
-  const { points, extra } = entry(state.rules, column, state.dice);
-  if (points[box] === undefined) throw new RuleError('box');
+  const choice = choices(state, seat).find((c) => c.game === g && c.box === box);
+  if (!choice) throw new RuleError('box');
+  const { points, extra } = choice;
 
-  const game = state.game;
-  column[box] = points[box];
-  state.extra[seat][game] += extra;
-  state.last = { seat, game, box, points: points[box], extra };
+  column[box] = points;
+  state.extra[seat][g] += extra;
+  state.last = { seat, game: g, box, points, extra };
   /** @type {Record<string, unknown>[]} */
-  const events = [{ type: 'score', seat, game, box, points: points[box], extra }];
+  const events = [{ type: 'score', seat, game: g, box, points, extra }];
 
   state.roll = 0;
   state.dice = [0, 0, 0, 0, 0];
@@ -269,10 +311,11 @@ function write(state, seat, box) {
   state.turn = next;
   // Everyone has had this round's turn once play comes back to the game's first player.
   if (next !== state.first) return events;
-  if (state.round < ROUNDS) {
+  const game = state.game;
+  if (state.round < roundsOf(state)) {
     state.round += 1;
     events.push({ type: 'round', game, round: state.round });
-  } else if (game + 1 < state.games) {
+  } else if (!isFree(state) && game + 1 < state.games) {
     state.game = game + 1;
     state.round = 1;
     state.first = (state.first + 1) % state.players;
@@ -417,10 +460,34 @@ export function judgement(rules, column) {
 }
 
 /**
- * The box the journeyman would write now (the page's hint), null when `seat` may not score now.
+ * The journeyman's judgement over every column `seat` may write now: a function from five dice to
+ * the best { game, box, points, extra, value } there, or null. Under the house rule with the basic
+ * variant, a crossing out counts only when no column takes the dice.
+ * @param {State} state  @param {number} seat
+ */
+export function judgeAll(state, seat) {
+  const columns = (isFree(state) ? state.boxes[seat].map((_, g) => g).filter((g) => BOXES.some((b) => state.boxes[seat][g][b] === undefined)) : [state.game]).map((game) => ({ game, judge: judgement(state.rules, state.boxes[seat][game]) }));
+  const strict = state.rules.variant === 'basis' && columns.length > 1;
+  return (/** @type {number[]} */ dice) => {
+    const each = columns.map(({ game, judge }) => {
+      const best = judge(dice);
+      return best && { game, ...best };
+    }).filter((b) => b !== null);
+    const fits = strict && each.some((b) => b.points > 0) ? each.filter((b) => b.points > 0) : each;
+    /** @type {{ game: number, box: string, points: number, extra: number, value: number } | null} */
+    let best = null;
+    for (const b of fits) if (!best || b.value > best.value + 1e-9) best = b;
+    return best;
+  };
+}
+
+/**
+ * Where the journeyman would write now (the page's hint): { game, box }, null when `seat` may not
+ * score now.
  * @param {State} state  @param {number} seat
  */
 export function suggest(state, seat) {
-  if (!Object.keys(options(state, seat)).length) return null;
-  return judgement(state.rules, columnOf(state, seat))(state.dice)?.box ?? null;
+  if (!choices(state, seat).length) return null;
+  const best = judgeAll(state, seat)(state.dice);
+  return best ? { game: best.game, box: best.box } : null;
 }

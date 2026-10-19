@@ -140,10 +140,10 @@ function after(dice, roll = 1, filled = {}, variant = 'meister') {
 
 test('made hands: every rank writes five alike and a large straight at once', () => {
   for (const level of LEVELS) {
-    assert.deepEqual(botMove(after([4, 4, 4, 4, 4]), 0, { level }), { type: 'score', box: 'wuerfle' }, level);
-    assert.deepEqual(botMove(after([3, 1, 2, 5, 4]), 0, { level }), { type: 'score', box: 'large' }, level);
+    assert.deepEqual(botMove(after([4, 4, 4, 4, 4]), 0, { level }), { type: 'score', box: 'wuerfle', game: 0 }, level);
+    assert.deepEqual(botMove(after([3, 1, 2, 5, 4]), 0, { level }), { type: 'score', box: 'large', game: 0 }, level);
     // The joker leaves one box: the matching upper one.
-    assert.deepEqual(botMove(after([2, 2, 2, 2, 2], 1, { wuerfle: 50 }, 'joker'), 0, { level }), { type: 'score', box: 'twos' }, level);
+    assert.deepEqual(botMove(after([2, 2, 2, 2, 2], 1, { wuerfle: 50 }, 'joker'), 0, { level }), { type: 'score', box: 'twos', game: 0 }, level);
   }
 });
 
@@ -153,10 +153,10 @@ test('the apprentice keeps the most common face, and four in a row; writes the m
   // A tie goes to the higher face.
   assert.deepEqual(botMove(after([2, 2, 6, 6, 1]), 0, { level }), { type: 'roll', keep: [false, false, true, true, false] });
   assert.deepEqual(botMove(after([6, 2, 3, 4, 1], 1, { small: 30 }), 0, { level }), { type: 'roll', keep: [false, true, true, true, true] });
-  assert.deepEqual(botMove(after([6, 6, 6, 5, 1], 3), 0, { level }), { type: 'score', box: 'three' });
+  assert.deepEqual(botMove(after([6, 6, 6, 5, 1], 3), 0, { level }), { type: 'score', box: 'three', game: 0 });
   // Nothing scores: it crosses out the cheapest box (Threes, at most 15, before Fours and the rest).
   const filled = { ones: 1, twos: 4, fives: 5, sixes: 6, chance: 20, small: 30, wuerfle: 0 };
-  assert.deepEqual(botMove(after([1, 2, 2, 5, 6], 3, filled), 0, { level }), { type: 'score', box: 'threes' });
+  assert.deepEqual(botMove(after([1, 2, 2, 5, 6], 3, filled), 0, { level }), { type: 'score', box: 'threes', game: 0 });
 });
 
 test('the journeyman builds on three alike, a run of four, two pairs', () => {
@@ -165,7 +165,7 @@ test('the journeyman builds on three alike, a run of four, two pairs', () => {
   assert.deepEqual(botMove(after([1, 2, 3, 4, 6]), 0, { level }), { type: 'roll', keep: [true, true, true, true, false] });
   assert.deepEqual(botMove(after([2, 2, 5, 5, 1]), 0, { level }), { type: 'roll', keep: [true, true, true, true, false] });
   // A full house it needs is written at once.
-  assert.deepEqual(botMove(after([3, 5, 3, 5, 3]), 0, { level }), { type: 'score', box: 'full' });
+  assert.deepEqual(botMove(after([3, 5, 3, 5, 3]), 0, { level }), { type: 'score', box: 'full', game: 0 });
 });
 
 test('every rank minds the basic rule: no crossing out while the roll fits', () => {

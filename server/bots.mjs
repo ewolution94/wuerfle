@@ -11,13 +11,14 @@
 //               (the 252 multisets of five, with their odds) through the rolls left, each leaf valued
 //               by the journeyman's judgement; decided within MASTER_MS
 //
-// Every rank writes only what options() allows (the basic rule's no crossing out, the joker rule).
-// No randomness: the same state always gives the same move. Runs in the page too, for the solo game.
+// Every rank writes only what choices() allows (the basic rule's no crossing out, the joker rule),
+// and under the house rule `free` it weighs every column it may write in. No randomness: the same
+// state always gives the same move. Runs in the page too, for the solo game.
 
-import { BOXES, MAX, UPPER, counts, judgement, options } from './rules.mjs';
+import { BOXES, MAX, UPPER, choices, counts, isFree, judgeAll } from './rules.mjs';
 
 /** @typedef {import('./rules.mjs').State} State */
-/** @typedef {{ type: 'roll', keep: boolean[] } | { type: 'score', box: string }} Move */
+/** @typedef {{ type: 'roll', keep: boolean[] } | { type: 'score', box: string, game: number }} Move */
 
 /** The ranks, weakest first. */
 export const LEVELS = Object.freeze(['apprentice', 'journeyman', 'master']);
@@ -46,8 +47,22 @@ export function botMove(state, seat, { level = 'journeyman' } = {}) {
   return journeyman(state, seat);
 }
 
-/** @param {string} box @returns {Move} */
-const write = (box) => ({ type: 'score', box });
+/** @param {{ box: string, game: number }} where @returns {Move} */
+const write = ({ box, game }) => ({ type: 'score', box, game });
+
+/**
+ * The boxes still open anywhere the seat may write: a column for plan() and the apprentice (under the
+ * house rule a box counts as open while any column has it open).
+ * @param {State} state  @param {number} seat
+ * @returns {import('./rules.mjs').Column}
+ */
+function openBoxes(state, seat) {
+  const columns = isFree(state) ? state.boxes[seat] : [state.boxes[seat][state.game]];
+  /** @type {import('./rules.mjs').Column} */
+  const out = {};
+  for (const b of BOXES) if (columns.every((col) => col[b] !== undefined)) out[b] = /** @type {number} */ (columns[0][b]);
+  return out;
+}
 /** @param {boolean[]} keep @returns {Move} */
 const reroll = (keep) => ({ type: 'roll', keep });
 
@@ -79,12 +94,12 @@ const runCounts = ({ from, len }) => [1, 2, 3, 4, 5, 6].map((f) => (f >= from &&
 
 /** @param {State} state @param {number} seat */
 function apprentice(state, seat) {
-  const opts = options(state, seat);
+  const opts = choices(state, seat);
   // A made hand is written at once.
-  const made = opts.wuerfle === 50 || opts.large === 40 || opts.full === 25 || opts.small === 30;
+  const made = opts.some((o) => (o.box === 'wuerfle' && o.points === 50) || (o.box === 'large' && o.points === 40) || (o.box === 'full' && o.points === 25) || (o.box === 'small' && o.points === 30));
   if (state.roll === 3 || made) return write(greedy(opts));
   const { c } = counts(state.dice);
-  const column = state.boxes[seat][state.game];
+  const column = openBoxes(state, seat);
   const run = runOf(c);
   if (run.len >= 4 && (column.small === undefined || column.large === undefined)) {
     return reroll(keepOf(state.dice, runCounts({ from: run.from, len: 4 })));
@@ -96,12 +111,17 @@ function apprentice(state, seat) {
   return reroll(state.dice.map((d) => d === face));
 }
 
-/** The box with the most points now; with nothing to score, the one with the least to lose. @param {Record<string, number>} opts */
+/**
+ * The box with the most points now (the first column on a tie); with nothing to score, the one with
+ * the least to lose.
+ * @param {{ game: number, box: string, points: number }[]} opts
+ */
 function greedy(opts) {
-  let best = '';
-  for (const b of BOXES) {
-    if (opts[b] === undefined) continue;
-    if (!best || opts[b] > opts[best] || (opts[b] === 0 && opts[best] === 0 && MAX[b] < MAX[best])) best = b;
+  let best = opts[0];
+  for (const o of opts) {
+    const max = MAX[/** @type {keyof typeof MAX} */ (o.box)];
+    const was = MAX[/** @type {keyof typeof MAX} */ (best.box)];
+    if (o.points > best.points || (o.points === 0 && best.points === 0 && max < was)) best = o;
   }
   return best;
 }
@@ -113,12 +133,11 @@ const ENOUGH = 15;
 
 /** @param {State} state @param {number} seat */
 function journeyman(state, seat) {
-  const column = state.boxes[seat][state.game];
-  const best = /** @type {NonNullable<ReturnType<ReturnType<typeof judgement>>>} */ (judgement(state.rules, column)(state.dice));
-  if (state.roll === 3) return write(best.box);
-  const keep = plan(column, state.dice, best);
+  const best = /** @type {NonNullable<ReturnType<ReturnType<typeof judgeAll>>>} */ (judgeAll(state, seat)(state.dice));
+  if (state.roll === 3) return write(best);
+  const keep = plan(openBoxes(state, seat), state.dice, best);
   // Keeping all five would only spend a roll.
-  return keep && !keep.every(Boolean) ? reroll(keep) : write(best.box);
+  return keep && !keep.every(Boolean) ? reroll(keep) : write(best);
 }
 
 /**
@@ -235,14 +254,18 @@ function expect(value, K) {
  */
 const TABLES = new Map();
 
-/**
- * @param {import('./rules.mjs').Rules} rules  @param {import('./rules.mjs').Column} column
- * @param {(dice: number[]) => { value: number } | null} judge  @param {number} until  the wall-clock stop
- */
-function tablesFor(rules, column, judge, until) {
+/** What a column's tables depend on: its open boxes, its upper sum up to 63, its Würfle. @param {import('./rules.mjs').Column} column */
+function columnKey(column) {
   let up = 0;
   for (const b of UPPER) up += column[b] ?? 0;
-  const key = `${rules.variant}|${BOXES.map((b) => (column[b] === undefined ? '-' : '+')).join('')}|${Math.min(up, 63)}|${column.wuerfle ?? '-'}`;
+  return `${BOXES.map((b) => (column[b] === undefined ? '-' : '+')).join('')}|${Math.min(up, 63)}|${column.wuerfle ?? '-'}`;
+}
+
+/**
+ * @param {string} key  what the tables depend on (the variant and the columns)
+ * @param {(dice: number[]) => { value: number } | null} judge  @param {number} until  the wall-clock stop
+ */
+function tablesFor(key, judge, until) {
   const hit = TABLES.get(key);
   if (hit) return hit;
   const leaf = new Float64Array(SETS.length);
@@ -266,11 +289,11 @@ function tablesFor(rules, column, judge, until) {
 /** @param {State} state @param {number} seat */
 function master(state, seat) {
   const until = now() + MASTER_MS;
-  const column = state.boxes[seat][state.game];
-  const judge = judgement(state.rules, column);
+  const judge = judgeAll(state, seat);
   const best = /** @type {NonNullable<ReturnType<typeof judge>>} */ (judge(state.dice));
-  if (state.roll === 3) return write(best.box);
-  const tables = tablesFor(state.rules, column, judge, until);
+  if (state.roll === 3) return write(best);
+  const columns = isFree(state) ? state.boxes[seat] : [state.boxes[seat][state.game]];
+  const tables = tablesFor(`${state.rules.variant}|${isFree(state) ? 'free|' : ''}${columns.map(columnKey).join('/')}`, judge, until);
   if (!tables) return journeyman(state, seat);
   const { c } = counts(state.dice);
   const here = INDEX[keyOf(c)];
@@ -285,7 +308,7 @@ function master(state, seat) {
       keep = K;
     }
   }
-  return keep < 0 ? write(best.box) : reroll(keepOf(state.dice, SETS[keep]));
+  return keep < 0 ? write(best) : reroll(keepOf(state.dice, SETS[keep]));
 }
 
 // ---- a random player, for scale ------------------------------------------------------------------
@@ -300,7 +323,7 @@ export function randomMove(state, seat, randomInt) {
   if (state.phase !== 'turn' || seat !== state.turn) return null;
   if (state.roll === 0) return { type: 'roll', keep: [...NONE] };
   if (state.roll < 3 && randomInt(3) > 0) return reroll(NONE.map(() => randomInt(2) === 1));
-  const allowed = Object.keys(options(state, seat));
+  const allowed = choices(state, seat);
   return write(allowed[randomInt(allowed.length)]);
 }
 

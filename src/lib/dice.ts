@@ -2,7 +2,7 @@
 // thrown with cannon-es (the look the user chose on 2026-10-19: B's glass and colours, A's block;
 // development/plans/wuerfle/dice.html is the sketch this grew from).
 //
-// Every throw is played through before it's shown. When the dice leave a hand (a flick, a shake, the
+// Every throw is played through before it's shown. When the dice leave a hand (a flick, the
 // button, or another player's throw replayed from where their dice left their hand), the physics runs
 // to the end at once, a few milliseconds of work, and its frames are recorded; then the recording
 // plays. That way the page knows which face of each die will land on top before anyone sees it, and
@@ -80,20 +80,13 @@ const CALM_STEPS = 12;
 const STILL = 1;
 const LAY_STEPS = 18;
 const HAND_Y = 2.4;
-/**
- * Shaking: the tray feels the phone's acceleration (m/s², without gravity) for as long as each motion
- * event lasts, in world units per second (`gain`), so 60 events a second add up to what the phone did,
- * not 60 kicks. Up and down only lifts a die that's down (the floor takes the rest). Speeds and spin
- * are capped so the dice rattle in the tray instead of leaving it; when the shaking stops they're
- * tossed out low with a spin, toward the middle. A shake starts above `start` and goes on while moves
- * pass `keep`; one with fewer than `moves` strong moves was a bump (the phone set down), so it throws
- * nothing and the dice slide back. The user's middle ground (2026-10-19, plans/wuerfle.md): the
- * first version's fixed kick per event sent the dice 140 to 270 dice high; the second needed a hard
- * shake; this one starts on a gentle shake, and its dice hop at most about one die high on a wild one.
- */
-const SHAKE = { gain: 6, lift: 0.8, spin: 1.2, maxSpeed: 10, maxUp: 5.5, maxSpin: 18, start: 9, keep: 5, moves: 8 };
-type Pose = { p: THREE.Vector3; q: THREE.Quaternion };
-const STILL_HANDS = () => ({ live: false, last: 0, at: 0, idx: [] as number[], feel: [] as number[], moves: 0, from: [] as Pose[] });
+/** Pixels: a drag that starts on a die picks the dice up past this; a hand throws once it has gone this far. */
+const DRAG_FROM_DIE = 28;
+const FLICK = 40;
+/** The camera's aspect below which the view grows taller instead of the dice smaller. */
+const TALL = 0.8;
+/** World units between the rail's bar and the play area's back wall. */
+const SAFE_ZONE = 0.62;
 /** Where in the hand each of n dice sits (x, y, z around the finger). */
 const CLUMP: Record<number, [number, number, number][]> = {
   1: [[0, 0, 0]],
@@ -173,20 +166,16 @@ export class DiceTable {
   /** Where a die lay before it went to the rail, so it comes back to the same spot. */
   #rest: (THREE.Vector3 | null)[] = [null, null, null, null, null];
   #headed: (THREE.Vector3 | null)[] = [null, null, null, null, null];
-  #tray = { xh: 3.5, zFar: -3, zNear: 3, rail: -2.4, play: -1.6 };
+  #tray = { xh: 3.5, zFar: -3, zNear: 3, rail: -2.4, bar: -0.46, play: -0.1 };
   #tweens: Tween[] = [];
   #folded = false;
   #flight: Flight | null = null;
   #recording: [number, number][] | null = null;
   #step = 0;
-  #hand = { active: false, x: 0, y: 0, idx: [] as number[], samples: [] as [number, number, number][] };
-  #down: { x: number; y: number; i: number | null; timer: number } | null = null;
-  /**
-   * `last`: the last strong move (the shake ends 350 ms after it); `at`: the last motion event;
-   * `feel`: how much of each move each die takes, so they don't move in step; `moves`: how many strong
-   * moves so far; `from`: where the dice lay, for a bump that throws nothing.
-   */
-  #shake = STILL_HANDS();
+  /** `from`: where the dice in the hand lay, for a hand let go without a flick. */
+  #hand = { active: false, x: 0, y: 0, idx: [] as number[], samples: [] as [number, number, number][], from: [] as { p: THREE.Vector3; q: THREE.Quaternion }[] };
+  /** A press: where it began, the die under it, the long-press timer, and how far it has gone (px). */
+  #down: { x: number; y: number; i: number | null; timer: number; far: number } | null = null;
   #running = false;
   #last = 0;
   #idleSince = 0;
@@ -281,7 +270,6 @@ export class DiceTable {
       body.addEventListener('collide', (e: { contact: CANNON.ContactEquation }) => {
         const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
         if (this.#recording) this.#recording.push([this.#step, v]);
-        else if (this.#shake.live) this.#o.onclack?.(v);
       });
       this.#bodies.push(body);
     }
@@ -302,12 +290,12 @@ export class DiceTable {
 
   /** Flying or settling: the table takes no taps and needs no new state. */
   get busy() {
-    return Boolean(this.#flight) || this.#hand.active || this.#shake.live || this.#tweens.length > 0;
+    return Boolean(this.#flight) || this.#hand.active || this.#tweens.length > 0;
   }
 
   /** Dice in the air or in a hand: no new throw yet. A die sliding to or from the rail isn't (it's finished at once). */
   get #throwing() {
-    return Boolean(this.#flight) || this.#hand.active || this.#shake.live;
+    return Boolean(this.#flight) || this.#hand.active;
   }
 
   /** Every slide to or from the rail jumps to its end (a quick tap mustn't wait for it). */
@@ -443,46 +431,6 @@ export class DiceTable {
     this.#play(rec, false);
   }
 
-  /**
-   * The phone's motion (acceleration without gravity, the device's own axes), from the page's
-   * devicemotion listener. A hard move throws the free dice around the tray; when the shaking stops,
-   * they're thrown from where they are.
-   */
-  motion(ax: number, ay: number, az: number) {
-    const strength = Math.hypot(ax, ay, az);
-    const now = performance.now();
-    if (this.#shake.live) {
-      // How long this event stood for (about 1/60 s), whatever the phone's rate.
-      const dt = THREE.MathUtils.clamp((now - this.#shake.at) / 1000, 1 / 120, 1 / 20);
-      this.#shake.at = now;
-      if (strength > SHAKE.keep) {
-        this.#shake.last = now;
-        this.#shake.moves++;
-        this.#jolt(ax, ay, az, dt, strength);
-      }
-      return;
-    }
-    if (strength < SHAKE.start || !this.allow.throw || this.#throwing || reduced()) return;
-    this.#finishTweens();
-    const idx = this.free();
-    if (!idx.length) return;
-    this.#shake = {
-      live: true,
-      last: now,
-      at: now,
-      idx,
-      feel: idx.map(() => rand(0.75, 1.25)),
-      moves: 1,
-      from: idx.map((i) => ({ p: this.#meshes[i].position.clone(), q: this.#meshes[i].quaternion.clone() })),
-    };
-    for (const i of idx) {
-      this.#where[i] = 'flight';
-      this.#bodies[i].wakeUp();
-    }
-    this.#jolt(ax, ay, az, 1 / 60, strength);
-    this.#wake();
-  }
-
   /** The canvas's size changed (or the page laid out): the camera and the walls follow. */
   fit() {
     const r = this.#renderer;
@@ -492,6 +440,9 @@ export class DiceTable {
     r?.setSize(w, h, false);
     const cam = this.#camera;
     cam.aspect = w / h;
+    // A tall table (a phone's, open) sees deeper, not smaller dice: below an aspect of 0.8 the view
+    // keeps its width and the vertical angle grows.
+    cam.fov = cam.aspect < TALL ? THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(THREE.MathUtils.degToRad(15)) * TALL) / cam.aspect)) : 30;
     const tan = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
     // Wide enough for eight dice across and deep enough for the rail and the play area.
     const d = Math.max(8 / (2 * tan * cam.aspect), 7.2 / (2 * tan));
@@ -508,13 +459,17 @@ export class DiceTable {
     t.zNear = near.z - 0.25;
     // Far enough from the top edge that a die on the rail shows whole (its top leans toward the edge).
     t.rail = t.zFar + 1.8;
-    t.play = t.zFar + 2.6;
+    // The rail's bar, and the play area's back wall a safe zone in front of it: a die against the wall
+    // stands up toward the camera, and without the gap its top reached over the bar (the user,
+    // 2026-10-20: "dice dont seem like they rolled too high/above the white bar").
+    t.bar = t.zFar + 2.54;
+    t.play = t.bar + SAFE_ZONE;
     this.#walls.left.position.set(-t.xh, 0, 0);
     this.#walls.right.position.set(t.xh, 0, 0);
     this.#walls.back.position.set(0, 0, t.play);
     this.#walls.front.position.set(0, 0, t.zNear);
     this.#rail.scale.x = t.xh * 2 - 0.4;
-    this.#rail.position.set(0, 0.08, t.play - 0.06);
+    this.#rail.position.set(0, 0.08, t.bar);
     for (let i = 0; i < 5; i++) {
       this.#rings[i].position.set(this.#slotX(i), 0.012, t.rail);
       if (this.#where[i] === 'rail' || this.#where[i] === 'row') this.#meshes[i].position.set(this.#slotX(i), 0.5, t.rail);
@@ -724,7 +679,7 @@ export class DiceTable {
     });
   }
 
-  // ---- the hand, the shake ------------------------------------------------------------------
+  // ---- the hand ----------------------------------------------------------------------------
 
   #startHand(x: number, y: number) {
     const h = this.#hand;
@@ -733,6 +688,7 @@ export class DiceTable {
     h.x = x;
     h.y = y;
     h.samples = [];
+    h.from = h.idx.map((i) => ({ p: this.#meshes[i].position.clone(), q: this.#meshes[i].quaternion.clone() }));
     for (const i of h.idx) {
       this.#where[i] = 'hand';
       if (this.#world.bodies.includes(this.#bodies[i])) this.#world.removeBody(this.#bodies[i]);
@@ -757,6 +713,21 @@ export class DiceTable {
       const spin = (1.2 + Math.min(speed, 30) * 0.5) * dt;
       m.quaternion.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(rand(-1, 1) * spin, rand(-1, 1) * spin, rand(-1, 1) * spin)));
       if (speed > 8 && Math.random() < dt * 6) this.#o.onclack?.(3 + Math.random() * 4);
+    });
+  }
+
+  /** A hand let go without a flick: nothing is thrown, the dice slide back to where they lay, faces and all. */
+  #dropHand() {
+    const h = this.#hand;
+    h.active = false;
+    h.idx.forEach((i, k) => {
+      const { p, q } = h.from[k];
+      this.#where[i] = 'tween';
+      this.#headed[i] = p;
+      this.#tween(i, p, q, 240, 0.2, () => {
+        this.#headed[i] = null;
+        this.#toFloor(i, p, q);
+      });
     });
   }
 
@@ -800,65 +771,6 @@ export class DiceTable {
       };
     });
     this.#launch(h.idx, starts, true);
-  }
-
-  /**
-   * The phone moved for `dt` seconds: the dice in the tray lag behind it (device axes to the table's:
-   * the phone's right is the table's right, its top the far side, its face up), capped (SHAKE).
-   */
-  #jolt(ax: number, ay: number, az: number, dt: number, strength: number) {
-    const { gain, lift, spin, maxSpeed, maxUp, maxSpin } = SHAKE;
-    this.#shake.idx.forEach((i, k) => {
-      const b = this.#bodies[i];
-      const g = gain * this.#shake.feel[k];
-      b.wakeUp();
-      b.velocity.x += -ax * g * dt;
-      b.velocity.z += ay * g * dt;
-      if (b.position.y < 0.62) b.velocity.y += Math.abs(az) * g * lift * dt;
-      b.angularVelocity.x += rand(-1, 1) * strength * spin * dt;
-      b.angularVelocity.z += rand(-1, 1) * strength * spin * dt;
-      const across = Math.hypot(b.velocity.x, b.velocity.z);
-      if (across > maxSpeed) {
-        b.velocity.x *= maxSpeed / across;
-        b.velocity.z *= maxSpeed / across;
-      }
-      b.velocity.y = Math.min(b.velocity.y, maxUp);
-      const turn = b.angularVelocity.length();
-      if (turn > maxSpin) b.angularVelocity.scale(maxSpin / turn, b.angularVelocity);
-    });
-  }
-
-  /** The shaking stopped: the dice roll out from where they are, low, spinning, toward the middle. */
-  #endShake() {
-    const { idx, moves, from } = this.#shake;
-    this.#shake = STILL_HANDS();
-    // A bump, not a shake: nothing is thrown, and the dice slide back to where they lay, faces and all.
-    if (moves < SHAKE.moves) {
-      idx.forEach((i, k) => {
-        const { p, q } = from[k];
-        this.#where[i] = 'tween';
-        this.#headed[i] = p;
-        this.#tween(i, p, q, 260, 0.15, () => {
-          this.#headed[i] = null;
-          this.#toFloor(i, p, q);
-        });
-      });
-      return;
-    }
-    const t = this.#tray;
-    const mid = (t.play + t.zNear) / 2;
-    const cap = (v: number) => THREE.MathUtils.clamp(v, -5, 5);
-    const starts = idx.map((i) => {
-      const b = this.#bodies[i];
-      return {
-        p: [b.position.x, Math.max(0.5, b.position.y), b.position.z],
-        q: [b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w],
-        // Every die tumbles at least once, so the faces turned for the server's number never show it.
-        v: [cap(b.velocity.x) - b.position.x * 0.5, rand(2.6, 3.6), cap(b.velocity.z) + (mid - b.position.z) * 0.5],
-        w: [rand(-13, 13), rand(-13, 13), rand(-13, 13)],
-      };
-    });
-    this.#launch(idx, starts, true);
   }
 
   // ---- the rail and the floor ---------------------------------------------------------------
@@ -1007,10 +919,12 @@ export class DiceTable {
     canvas.setPointerCapture(e.pointerId);
     const i = this.#hitDie(e.clientX, e.clientY);
     const canThrow = this.allow.throw && this.free().length > 0;
-    const timer = canThrow ? window.setTimeout(() => {
-      if (this.#down && !this.#hand.active && (this.#down.i === null || this.#where[this.#down.i] !== 'rail')) this.#startHand(this.#down.x, this.#down.y);
+    // Holding still on the table gathers the dice; on a die it's a tap to keep, however long (the user
+    // once kept a die and threw it, 2026-10-20): from a die only a real drag picks the dice up.
+    const timer = canThrow && i === null ? window.setTimeout(() => {
+      if (this.#down && !this.#hand.active) this.#startHand(this.#down.x, this.#down.y);
     }, 170) : 0;
-    this.#down = { x: e.clientX, y: e.clientY, i, timer };
+    this.#down = { x: e.clientX, y: e.clientY, i, timer, far: 0 };
   };
 
   #pointermove = (e: PointerEvent) => {
@@ -1019,7 +933,8 @@ export class DiceTable {
     this.#hand.x = e.clientX;
     this.#hand.y = e.clientY;
     const onRail = d.i !== null && this.#where[d.i] === 'rail';
-    if (!this.#hand.active && !onRail && this.allow.throw && this.free().length && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) {
+    d.far = Math.max(d.far, Math.hypot(e.clientX - d.x, e.clientY - d.y));
+    if (!this.#hand.active && !onRail && this.allow.throw && this.free().length && d.far > (d.i === null ? 10 : DRAG_FROM_DIE)) {
       clearTimeout(d.timer);
       this.#startHand(e.clientX, e.clientY);
     }
@@ -1030,7 +945,8 @@ export class DiceTable {
     if (!d) return;
     clearTimeout(d.timer);
     this.#down = null;
-    if (this.#hand.active) return this.#release();
+    // Thrown only by a flick that went somewhere; less puts the dice back.
+    if (this.#hand.active) return d.far < FLICK ? this.#dropHand() : this.#release();
     const w = d.i !== null ? this.#where[d.i] : null;
     if (d.i !== null && this.allow.keep && (w === 'floor' || w === 'rail' || w === 'row')) this.#o.onkeep(d.i);
     else if (!this.allow.throw && !this.allow.keep) this.#o.onrefuse?.();
@@ -1083,14 +999,6 @@ export class DiceTable {
     const dt = Math.min(0.05, (now - this.#last) / 1000);
     this.#last = now;
     if (this.#hand.active) this.#updateHand(dt, now);
-    if (this.#shake.live) {
-      this.#world.step(STEP, dt, 8);
-      for (const i of this.#shake.idx) {
-        this.#meshes[i].position.copy(this.#bodies[i].position as unknown as THREE.Vector3);
-        this.#meshes[i].quaternion.copy(this.#bodies[i].quaternion as unknown as THREE.Quaternion);
-      }
-      if (now - this.#shake.last > 350) this.#endShake();
-    }
     const f = this.#flight;
     if (f) {
       const s = Math.min(f.rec.steps - 1, Math.floor(((now - f.t0) / 1000) / STEP));

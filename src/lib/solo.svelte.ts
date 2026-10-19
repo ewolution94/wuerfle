@@ -24,6 +24,8 @@ export interface SoloSetup {
   bots: number;
   level: Level;
   variant: Variant;
+  /** The house rule: any column (two games or more). */
+  free?: boolean;
 }
 
 export interface Record {
@@ -106,7 +108,7 @@ export class Solo implements Driver {
         { name: me.name, avatar: me.avatar, bot: false, online: true, gone: false },
         ...BOT_NAMES.slice(0, setup.bots).map((name) => ({ name, avatar: randomAvatar(), bot: true, level: setup.level, online: true, gone: false })),
       ];
-      this.#state = createGame({ players: this.#people.length, games: setup.games, rules: { variant: setup.variant }, first: 0 }) as MatchState;
+      this.#state = createGame({ players: this.#people.length, games: setup.games, rules: { variant: setup.variant, free: Boolean(setup.free) }, first: 0 }) as MatchState;
       this.#id = `solo:${Date.now().toString(36)}`;
     }
     this.#publish();
@@ -136,8 +138,8 @@ export class Solo implements Driver {
     this.#move(0, { type: 'roll', keep }, fling);
   }
 
-  async score(box: BoxId) {
-    this.#move(0, { type: 'score', box }, null);
+  async score(box: BoxId, game: number) {
+    this.#move(0, { type: 'score', box, game }, null);
   }
 
   hold(held: boolean[]) {
@@ -149,7 +151,7 @@ export class Solo implements Driver {
     return Math.max(0, at - now);
   }
 
-  #move(seat: number, move: { type: 'roll'; keep: boolean[] } | { type: 'score'; box: BoxId }, fling: Fling | null) {
+  #move(seat: number, move: { type: 'roll'; keep: boolean[] } | { type: 'score'; box: BoxId; game: number }, fling: Fling | null) {
     const s = this.#state;
     const events = act(s, seat, move, { randomInt }) as { type: string; dice?: number[]; held?: boolean[]; roll?: number }[];
     const rolled = events.find((e) => e.type === 'roll');
@@ -208,7 +210,7 @@ export class Solo implements Driver {
     const wait = Math.max(think, this.#holdUntil - Date.now() + think / 2);
     this.#timer = window.setTimeout(() => {
       if (this.#closed || s.turn !== seat) return;
-      const move = botMove(s, seat, { level: this.#people[seat].level ?? 'journeyman' }) as { type: 'roll'; keep: boolean[] } | { type: 'score'; box: BoxId } | null;
+      const move = botMove(s, seat, { level: this.#people[seat].level ?? 'journeyman' }) as { type: 'roll'; keep: boolean[] } | { type: 'score'; box: BoxId; game: number } | null;
       if (!move) return;
       if (move.type === 'roll' && s.roll > 0 && move.keep.some((k, i) => k !== this.#hold[i])) {
         this.#hold = move.keep.map(Boolean);

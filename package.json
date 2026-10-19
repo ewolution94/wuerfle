@@ -2,7 +2,7 @@
   "name": "wuerfle",
   "private": true,
   "version": "0.1.0",
-  "description": "The classic five-dice game for the afternoon meeting, solo or at a table with friends: glass dice you flick or shake, and the paper block with one to six games.",
+  "description": "The classic five-dice game for the afternoon meeting, solo or at a table with friends: glass dice you flick across the table, and the paper block with one to six games.",
   "type": "module",
   "license": "MIT",
   "engines": {

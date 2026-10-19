@@ -13,13 +13,12 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { options as allowed, sheet, suggest as suggestion } from '../../server/rules.mjs';
+  import { choices as allowed, roundsOf, sheet, suggest as suggestion, isFree } from '../../server/rules.mjs';
   import { ApiError, type BoxId } from '../lib/api';
   // The dice (three.js and cannon-es) are their own chunk, fetched after the first screen.
   import type { DiceTable, Fling } from '../lib/dice';
   import { errorText, t } from '../lib/i18n.svelte';
   import type { Driver, MatchView } from '../lib/match';
-  import { motion, setShaking, shakeWith, shouldAsk } from '../lib/motion.svelte';
   import { prefs } from '../lib/prefs.svelte';
   import { play, unlockOnGesture } from '../lib/sound.svelte';
   import Avatar from './Avatar.svelte';
@@ -27,6 +26,9 @@
   import ScoreBlock from './ScoreBlock.svelte';
 
   let { match, driver, onsettings }: { match: MatchView; driver: Driver; onsettings: () => void } = $props();
+
+  type Pick = { game: number; box: BoxId };
+  type Choice = Pick & { points: number };
 
   const NONE = [false, false, false, false, false];
 
@@ -55,8 +57,11 @@
   let side = $state(false);
   /** The folded strip's height: as much of the canvas as shows the rail's row (DiceTable.stripHeight). */
   let stripH = $state(124);
-  /** The box you tapped, waiting for its ✓ (or a second tap). */
-  let chosen: BoxId | null = $state(null);
+  /** The open table's height: the screen less the band, the throw and the totals (measured). */
+  let wideH = $state(0);
+  let tableEl: HTMLDivElement | undefined = $state();
+  /** The box you tapped (its column and box), waiting for its ✓ (or a second tap). */
+  let chosen: Pick | null = $state(null);
 
   const s = $derived(match.state);
   const me = $derived(match.me);
@@ -68,8 +73,9 @@
   const canKeep = $derived(ready && myTurn && s.roll >= 1 && s.roll < 3 && !pending && !flying);
   const canWrite = $derived(myTurn && s.roll >= 1 && !pending && !flying);
   const blockSeat = $derived(shown >= 0 ? shown : me >= 0 ? me : s.turn);
-  const options = $derived(canWrite && blockSeat === me ? (allowed(s, me) as Partial<Record<BoxId, number>>) : null);
-  const suggest = $derived(options && prefs.hint ? (suggestion(s, me) as BoxId) : null);
+  // What you may write now, in every column you may write in (one, or all under the house rule).
+  const options = $derived(canWrite && blockSeat === me ? (allowed(s, me) as Choice[]) : null);
+  const suggest = $derived(options && prefs.hint ? (suggestion(s, me) as Pick | null) : null);
   const turnName = $derived(match.people[s.turn]?.name ?? '');
 
   const hint = $derived.by(() => {
@@ -77,7 +83,7 @@
     if (me < 0) return t('hintTheirs', { name: turnName });
     if (match.autopilot >= 0) return match.autopilot === me ? t('hintAutoYou') : t('hintAuto', { name: turnName });
     if (s.turn !== me) return t('hintTheirs', { name: turnName });
-    if (s.roll === 0) return prefs.shake && motion.live ? t('hintFirstShake') : t('hintFirst');
+    if (s.roll === 0) return t('hintFirst');
     if (s.roll >= 3) return t('hintWrite');
     const n = 3 - s.roll;
     return n === 1 ? t('hintKeepOne') : t('hintKeep', { n });
@@ -95,7 +101,18 @@
     };
     onwide();
     wide.addEventListener('change', onwide);
-    const unshake = shakeWith(onMotion);
+    // The open table takes what the band, the throw and the players' totals leave (the band grows
+    // with the phone's notch, so it's measured, not guessed).
+    const measure = () => {
+      const t = tableEl;
+      if (!t || side) return;
+      const h = (sel: string) => t.querySelector<HTMLElement>(sel)?.offsetHeight ?? 0;
+      const pad = parseFloat(getComputedStyle(t).paddingBottom) || 0;
+      wideH = Math.max(250, Math.floor(t.clientHeight - h('.band') - h('.actions') - h('.who') - pad - 6));
+    };
+    const ro = new ResizeObserver(measure);
+    if (tableEl) ro.observe(tableEl);
+    measure();
     void import('../lib/dice').then(({ DiceTable }) => {
       if (gone) return;
       dice = new DiceTable({
@@ -119,7 +136,7 @@
     return () => {
       gone = true;
       wide.removeEventListener('change', onwide);
-      unshake();
+      ro.disconnect();
       clearTimeout(unfoldTimer);
       dice?.destroy();
       dice = null;
@@ -250,20 +267,20 @@
   }
 
   /** A box tapped: chosen (and the block up), or written when it already was. */
-  function pick(box: BoxId, from: Element) {
+  function pick(p: Pick, from: Element) {
     if (!canWrite) return;
-    if (chosen === box) return write(box, from);
-    chosen = box;
+    if (chosen && chosen.game === p.game && chosen.box === p.box) return write(p, from);
+    chosen = p;
     setFold(true);
   }
 
-  function write(box: BoxId, from: Element) {
+  function write(p: Pick, from: Element) {
     if (!canWrite) return;
     chosen = null;
     pending = true;
     error = '';
     driver
-      .score(box, from)
+      .score(p.box, p.game, from)
       .catch((e) => flash(errorText(e instanceof ApiError ? e.code : 'other')))
       .finally(() => (pending = false));
   }
@@ -286,28 +303,21 @@
 
   // ---- shaking the phone -------------------------------------------------------------------
 
-  function onMotion(e: DeviceMotionEvent) {
-    const a = e.acceleration;
-    if (!a || a.x === null) return;
-    const [x, y, z] = [a.x ?? 0, a.y ?? 0, a.z ?? 0];
-    // A firm move opens a folded table (a phone set down doesn't); the shaking that follows rolls.
-    if (folded && canThrow && Math.hypot(x, y, z) > 14) setFold(false);
-    dice?.motion(x, y, z);
-  }
-  /** The chip's answer: from this tap iOS shows its prompt. */
-  async function allowShake() {
-    const r = await setShaking(true);
-    if (r === 'granted') flash(t('shakeOn'));
-    else if (r === 'denied') flash(t('shakeDenied'));
-  }
-  const asking = $derived(shouldAsk() && me >= 0 && !over && !folded);
 </script>
 
-<div class="table" class:watching={me < 0} class:folded style:--strip-h="{stripH}px">
+<div
+  class="table"
+  class:watching={me < 0}
+  class:folded
+  class:side
+  bind:this={tableEl}
+  style:--strip-h="{stripH}px"
+  style:--tray-wide={wideH && !side ? `${wideH}px` : null}
+>
   <header class="band">
     <span class="app">Würfle</span>
     <span class="round">
-      {#if over}{t('soloDone')}{:else if s.games > 1}{t('roundOf', { game: s.game + 1, games: s.games, round: s.round })}{:else}{t('roundOfOne', { round: s.round })}{/if}
+      {#if over}{t('soloDone')}{:else if isFree(s)}{t('roundOfFree', { round: s.round, rounds: roundsOf(s) })}{:else if s.games > 1}{t('roundOf', { game: s.game + 1, games: s.games, round: s.round })}{:else}{t('roundOfOne', { round: s.round })}{/if}
     </span>
     {#if match.endsAt && !over}<Clock left={(at, now) => driver.left(at, now)} endsAt={match.endsAt} tick={myTurn} />{/if}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -321,14 +331,7 @@
       aria-label={t('throw')}
       onkeydown={keys}
     ></canvas>
-    <p class="hint" class:alert={error !== ''} class:hidden={asking && !error} aria-live="polite">{error || hint}</p>
-    {#if asking && !error}
-      <div class="ask">
-        <span>{t('shakeAsk')}</span>
-        <button type="button" class="allow" onclick={allowShake}>{t('shakeAllow')}</button>
-        <button type="button" class="later" onclick={() => setShaking(false)}>{t('shakeLater')}</button>
-      </div>
-    {/if}
+    <p class="hint" class:alert={error !== ''} aria-live="polite">{error || hint}</p>
   </div>
 
   <div class="actions">
@@ -347,7 +350,11 @@
 
   <nav class="who" aria-label={t('blockOf', { name: '' })}>
     {#each match.people as p, seat (seat)}
-      <button type="button" class="person" class:turn={!over && s.turn === seat} aria-pressed={blockSeat === seat} onclick={() => (shown = seat)}>
+      <button type="button" class="person" class:turn={!over && s.turn === seat} aria-pressed={blockSeat === seat} onclick={() => {
+          shown = seat;
+          // On a phone their block is under the table: it comes up.
+          setFold(true);
+        }}>
         {#if p.avatar}<Avatar avatar={p.avatar} size={22} ring={false} />{/if}
         <span class="name" class:gone={p.gone || !p.online}>{seat === me ? t('you') : p.name}</span>
         <b>{match.totals[seat]?.total ?? 0}</b>
@@ -366,13 +373,15 @@
 </div>
 
 <style>
-  /* The screen, top to bottom: the band, the dice, the throw, the players, the block (which takes what's
-     left and scrolls inside), the total. The open table leaves the block its first four rows; folded,
-     the table is a strip of the dice (--strip-h) and the block has the rest. The canvas keeps the open
-     table's height and the tray clips it, so folding never resizes the drawing. On a wide screen the
-     dice go left and the block right, and nothing folds. */
+  /* The screen, top to bottom: the band, the dice, the throw, the players with their totals, the block
+     (which takes what's left and scrolls inside), the total. Open, the table takes all the room above
+     the throw and the players' totals sit at the bottom (the user, 2026-10-20: "only show the total
+     scores at the bottom and expand the full scoreboard when i press the switch button"); folded, the
+     table is a strip of the dice (--strip-h) and the block and its total have the rest. The canvas keeps
+     the open table's height (--tray-wide, measured) and the tray clips it, so folding never resizes
+     the drawing. On a wide screen the dice go left and the block right, and nothing folds. */
   .table {
-    --tray-wide: max(250px, calc(100dvh - 370px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+    --tray-wide: max(250px, calc(100dvh - 170px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
     --tray-h: var(--tray-wide);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -473,50 +482,8 @@
     color: var(--gold);
     font-weight: 700;
   }
-  .hint.hidden,
   .folded .hint:not(.alert) {
     opacity: 0;
-  }
-
-  /* The ask for shaking, from a tap (src/lib/motion.svelte.ts). */
-  .ask {
-    position: absolute;
-    left: 50%;
-    bottom: 12px;
-    translate: -50% 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 4px 4px 14px;
-    border: 1.5px solid var(--gold);
-    border-radius: 999px;
-    background: rgb(11 16 41 / 0.86);
-    color: var(--ink);
-    font: 600 14.5px/1 var(--text);
-    white-space: nowrap;
-  }
-  .ask button {
-    min-height: 34px;
-    border: 0;
-    border-radius: 999px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .ask .allow {
-    padding: 0 14px;
-    background: var(--gold);
-    color: var(--gold-ink);
-    font: 400 15.5px/1 var(--display);
-  }
-  .ask .later {
-    padding: 0 10px;
-    background: none;
-    color: var(--mute);
-    font: 500 13.5px/1 var(--text);
-  }
-  .ask button:focus-visible {
-    outline: 3px solid var(--gold);
-    outline-offset: 2px;
   }
 
   .actions {
@@ -609,6 +576,11 @@
     grid-area: sheet;
     min-height: 0;
     padding: 0 12px;
+    transition: opacity 0.3s;
+  }
+  .table:not(.folded, .side) .sheet-wrap {
+    opacity: 0;
+    pointer-events: none;
   }
   @media (min-width: 980px) and (min-height: 620px) {
     .sheet-wrap {
@@ -629,6 +601,17 @@
     margin: 0 12px;
     padding: 10px 10px 0;
     border-bottom: 3px double var(--cobalt-hi);
+    overflow: hidden;
+    transition:
+      height 0.44s cubic-bezier(0.3, 0.8, 0.25, 1),
+      padding 0.44s cubic-bezier(0.3, 0.8, 0.25, 1),
+      opacity 0.3s;
+  }
+  .table:not(.folded, .side) .grand {
+    height: 0;
+    padding-top: 0;
+    border-bottom-width: 0;
+    opacity: 0;
   }
   .grand span {
     font: 700 12.5px/1 var(--text);

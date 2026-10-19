@@ -7,10 +7,10 @@
   From Stammtisch's Settings.svelte.
 -->
 <script lang="ts">
+  import GuideRow from './GuideRow.svelte';
   import { themeShift } from '../../vendor/ewo/elements/theme-shift.js';
   import { ApiError } from '../lib/api';
   import { errorText, i18n, setLanguage, systemLang, t, type LangChoice } from '../lib/i18n.svelte';
-  import { setShaking } from '../lib/motion.svelte';
   import { prefs, setHint } from '../lib/prefs.svelte';
   import type { Room } from '../lib/room.svelte';
   import { play, setSound, sound } from '../lib/sound.svelte';
@@ -37,8 +37,6 @@
   const hostName = $derived(view?.players.find((p) => p.id === view.host)?.name ?? '');
   let sure: 'end' | 'leave' | 'giveup' | null = $state(null);
   let error = $state('');
-  /** The phone said no to motion when shaking was switched on. */
-  let shakeRefused = $state(false);
   $effect(() => {
     if (!open) {
       sure = null;
@@ -84,6 +82,7 @@
 <ewo-sheet {open} label={t('settings')} oncancel={onclose} onclose={closed}>
   <span slot="heading">{t('settings')}</span>
   {#if shown}
+    <div class="guide"><GuideRow before={onclose} /></div>
     {#if (room && view?.phase === 'play') || ongiveup}
       <section class="game">
         <h3 class="label">{t('thisGame')}</h3>
@@ -116,7 +115,6 @@
           </div>
           {#if !isHost}<p class="hint">{t('endHint', { name: hostName })}</p>{/if}
         {/if}
-        <button class="btn quiet howto" type="button" onclick={() => (onclose(), (ui.guide = true))}>{t('guide')}</button>
         {#if error}<p class="error" role="alert">{error}</p>{/if}
       </section>
     {/if}
@@ -142,18 +140,6 @@
         ></ewo-switch>
       </div>
       <div class="row">
-        <span class="name">{t('shake')}<small>{shakeRefused ? t('shakeDenied') : t('shakeHint')}</small></span>
-        <!-- Switching it on is a tap, so iOS may show its prompt from here. -->
-        <ewo-switch
-          checked={prefs.shake}
-          aria-label={t('shake')}
-          onchange={(e) => {
-            shakeRefused = false;
-            void setShaking(e.detail.checked).then((r) => (shakeRefused = e.detail.checked && r === 'denied'));
-          }}
-        ></ewo-switch>
-      </div>
-      <div class="row">
         <span class="name">{t('hintBox')}<small>{t('hintBoxHint')}</small></span>
         <ewo-switch checked={prefs.hint} aria-label={t('hintBox')} onchange={(e) => setHint(e.detail.checked)}></ewo-switch>
       </div>
@@ -162,8 +148,8 @@
 </ewo-sheet>
 
 <style>
-  .howto {
-    align-self: flex-start;
+  .guide {
+    margin-bottom: 22px;
   }
   section {
     display: flex;

@@ -28,6 +28,8 @@ export interface Settings {
 
 export interface Rules {
   variant: Variant;
+  /** The house rule: with two games or more, any column may be written (server/rules.mjs). */
+  free: boolean;
 }
 
 export interface Player {

@@ -12,6 +12,7 @@
 //   AUDIT=1 node tools/qa.mjs …                every shot also checks that text sits in the middle of its box
 //   W=1440 H=900 BROWSER=chromium node tools/qa.mjs …   the wide layout, in Chromium too
 //   SOLO=1 node tools/qa.mjs …                 a game alone instead (the rules in the page)
+//   GAMES=2 FREE=1 node tools/qa.mjs …         two games under the house rule (any column), alone or at a table
 import { chromium, webkit } from '../../folio/node_modules/playwright/index.mjs';
 import { mkdirSync } from 'node:fs';
 import { textAudit } from './text-audit.mjs';
@@ -25,6 +26,7 @@ const BOTS = Number(process.env.BOTS ?? 1);
 const GAMES = Number(process.env.GAMES ?? 1);
 const AUDIT = process.env.AUDIT ? Number(process.env.AUDIT) : 0;
 const SOLO = Boolean(process.env.SOLO);
+const FREE = Boolean(process.env.FREE);
 mkdirSync(OUT, { recursive: true });
 
 const problems = [];
@@ -143,6 +145,12 @@ async function playTurn(p, n) {
       await shot(p, 'early-write');
     }
   }
+  // The open table shows the totals only: the block comes up with Write (or by itself after the third roll).
+  if ((await page.locator('.fold').count()) > 0 && (await page.locator('.table.folded').count()) === 0) {
+    await page.locator('.fold').click();
+    await page.waitForSelector('.table.folded');
+    await page.waitForTimeout(500);
+  }
   const cands = await page.locator('.cand').evaluateAll((els) => els.map((e, i) => ({ i, n: Number(e.textContent) })));
   const best = cands.sort((a, b) => b.n - a.n)[0];
   await page.locator('.cand').nth(best.i).click();
@@ -213,6 +221,14 @@ if (SOLO) {
   const me = await person('solo');
   await me.page.goto(BASE);
   await setName(me, 'Solo');
+  if (GAMES > 1) {
+    await me.page.locator('.home ewo-segmented').first().evaluate((el, n) => {
+      el.value = String(n);
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: String(n) }, bubbles: true }));
+    }, GAMES);
+    await me.page.waitForTimeout(200);
+  }
+  if (FREE) await me.page.locator('.home .free ewo-switch').click();
   await shot(me, 'home');
   await me.page.locator('.home .btn.primary').click();
   await me.page.waitForSelector('.table canvas');
@@ -245,6 +261,10 @@ if (SOLO) {
       el.value = String(n);
       el.dispatchEvent(new CustomEvent('change', { detail: { value: String(n) }, bubbles: true }));
     }, GAMES);
+    await host.page.waitForTimeout(400);
+  }
+  if (FREE) {
+    await host.page.locator('.lobby .free ewo-switch').click();
     await host.page.waitForTimeout(400);
   }
   await shot(host, 'lobby');

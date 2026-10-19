@@ -167,10 +167,22 @@
     border-left: 1px solid var(--rule);
     background: rgb(143 165 255 / 0.09);
   }
+  /* As on the block: a crossed-out box shows its line, not a 0. */
   .zero {
-    color: var(--gold);
-    text-decoration: line-through;
-    text-decoration-thickness: 2px;
+    position: relative;
+    color: transparent;
+  }
+  .zero::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--gold);
+    translate: -50% -50%;
+    rotate: -16deg;
   }
   .tag {
     font: 400 18px/1 var(--display);

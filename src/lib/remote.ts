@@ -31,8 +31,8 @@ export function remote(room: Room): Driver {
   return {
     roll: (keep: boolean[], fling: Fling | null, from?: Element | null) =>
       waitAt(from, (signal) => room.act('move', { move: { type: 'roll', keep }, fling }, signal)).then(() => undefined),
-    score: (box: BoxId, from?: Element | null) =>
-      waitAt(from, (signal) => room.act('move', { move: { type: 'score', box } }, signal), t('wait_score')).then(() => undefined),
+    score: (box: BoxId, game: number, from?: Element | null) =>
+      waitAt(from, (signal) => room.act('move', { move: { type: 'score', box, game } }, signal), t('wait_score')).then(() => undefined),
     hold(held: boolean[]) {
       next = [...held];
       void sendHold();

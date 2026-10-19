@@ -69,7 +69,7 @@ test('score: every box over hand-picked dice', () => {
 // ---- rules and the match -----------------------------------------------------------------------
 
 test('rules: the championship rule by default, known keys replaced, wrong values refused', () => {
-  assert.deepEqual({ ...RULES }, { variant: 'meister' });
+  assert.deepEqual({ ...RULES }, { variant: 'meister', free: false });
   assert.deepEqual(cleanRules(), RULES);
   assert.deepEqual(cleanRules(null), RULES);
   assert.deepEqual([...VARIANTS], ['meister', 'basis', 'joker']);
@@ -79,6 +79,8 @@ test('rules: the championship rule by default, known keys replaced, wrong values
   throws(() => cleanRules({ variant: 'kniffel' }), 'rules');
   throws(() => cleanRules({ variant: 2 }), 'rules');
   throws(() => cleanRules('joker'), 'rules');
+  assert.equal(cleanRules({ free: true }).free, true);
+  throws(() => cleanRules({ free: 'yes' }), 'rules');
 });
 
 test('createGame: 1 to 8 players, 1 to 6 games, the first player in range', () => {
@@ -187,8 +189,8 @@ test('options: nothing before a roll, for another seat, or after the match', () 
   assert.equal(Object.keys(options(s, 0)).length, 13);
   assert.deepEqual(options(s, 1), {});
   assert.equal(suggest(s, 1), null);
-  assert.ok(suggest(s, 0) in options(s, 0));
-  assert.equal(suggest(s, 0), 'large');
+  assert.ok(suggest(s, 0).box in options(s, 0));
+  assert.deepEqual(suggest(s, 0), { game: 0, box: 'large' });
 });
 
 // ---- a turn -----------------------------------------------------------------------------------

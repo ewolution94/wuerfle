@@ -42,7 +42,8 @@ export interface Driver {
   /** Throw the dice not kept; `fling` is where they left the hand, for the others to see. */
   roll(keep: boolean[], fling: Fling | null, from?: Element | null): Promise<void>;
   /** Write the current dice into a box. */
-  score(box: BoxId, from?: Element | null): Promise<void>;
+  /** A box written in column `game`. */
+  score(box: BoxId, game: number, from?: Element | null): Promise<void>;
   /** The dice you're keeping for your next throw (shown to everyone; no answer waited for). */
   hold(held: boolean[]): void;
   /** Milliseconds until a server timestamp. */

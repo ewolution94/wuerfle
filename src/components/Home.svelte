@@ -4,6 +4,8 @@
   How to play opens once on a device's first visit. From Stammtisch's Home.svelte.
 -->
 <script lang="ts">
+  import FreeRule from './FreeRule.svelte';
+  import GuideRow from './GuideRow.svelte';
   import { api, ApiError, CODE, LEVELS, VARIANTS, type Level, type Seat, type Variant } from '../lib/api';
   import type { Avatar } from '../lib/avatar';
   import { errorText, t } from '../lib/i18n.svelte';
@@ -120,6 +122,9 @@
         {#each [1, 2, 3, 4, 5, 6] as n (n)}<option value={String(n)}>{n}</option>{/each}
       </ewo-segmented>
     </div>
+    {#if setup.games > 1}
+      <FreeRule checked={Boolean(setup.free)} onchange={(on) => changeSetup({ free: on })} />
+    {/if}
     <div class="setting">
       <span class="label">{t('opponents')}</span>
       <ewo-segmented stretch value={String(setup.bots)} label={t('opponents')} onchange={(e) => changeSetup({ bots: Number(e.detail.value) })}>
@@ -169,7 +174,7 @@
     </form>
   </section>
 
-  <button class="btn quiet guide" type="button" onclick={() => (ui.guide = true)}>{t('guide')}</button>
+  <GuideRow />
 </div>
 
 <style>
@@ -227,8 +232,5 @@
     font: 400 22px/1.2 var(--display);
     letter-spacing: 0.3em;
     text-transform: uppercase;
-  }
-  .guide {
-    align-self: center;
   }
 </style>

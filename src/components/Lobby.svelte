@@ -6,6 +6,8 @@
   answers the tap"). From Stammtisch's Lobby.svelte.
 -->
 <script lang="ts">
+  import FreeRule from './FreeRule.svelte';
+  import GuideRow from './GuideRow.svelte';
   import { ui } from '../lib/ui.svelte';
   import { ApiError, LEVELS, VARIANTS, type Config, type Level, type Player, type Rules, type Settings, type Variant, type View } from '../lib/api';
   import type { Avatar as AvatarValue } from '../lib/avatar';
@@ -220,6 +222,9 @@
       {/if}
       <span class="hint">{t('gamesHint')}</span>
     </div>
+    {#if settings.games > 1}
+      <FreeRule checked={Boolean(rules.free)} editable={isHost} onchange={(on) => changeRules({ free: on })} />
+    {/if}
     <div class="setting">
       <span class="label">{t('rules')}</span>
       {#if isHost}
@@ -255,8 +260,8 @@
       {/if}
       <span class="hint">{t(`levelHint_${settings.bots}`)}</span>
     </div>
-    <button class="btn quiet small howto" type="button" onclick={() => (ui.guide = true)}>{t('guide')}</button>
   </section>
+  <GuideRow />
 
   <div class="go">
     {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -423,10 +428,6 @@
   .value {
     font: 400 18px/1.2 var(--display);
     color: #ffffff;
-  }
-  .howto {
-    align-self: flex-start;
-    padding-inline: 2px;
   }
   .go {
     display: flex;

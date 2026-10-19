@@ -9,7 +9,7 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { sheet } from '../../server/rules.mjs';
+  import { isFree, sheet } from '../../server/rules.mjs';
   import { LOWER, UPPER, type BoxId, type GameSheet, type MatchState } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
   import DieGlyph from './DieGlyph.svelte';
@@ -27,12 +27,13 @@
     state: MatchState;
     seat: number;
     /** What you may write now and what it scores; null when you may not. */
-    options?: Partial<Record<BoxId, number>> | null;
-    suggest?: BoxId | null;
+    /** Every box you may write now, column by column; null when you may not. */
+    options?: { game: number; box: BoxId; points: number }[] | null;
+    suggest?: { game: number; box: BoxId } | null;
     /** The box tapped, waiting for its ✓. */
-    chosen?: BoxId | null;
-    onpick?: (box: BoxId, from: Element) => void;
-    onwrite?: (box: BoxId, from: Element) => void;
+    chosen?: { game: number; box: BoxId } | null;
+    onpick?: (pick: { game: number; box: BoxId }, from: Element) => void;
+    onwrite?: (pick: { game: number; box: BoxId }, from: Element) => void;
     ondrop?: () => void;
   } = $props();
 
@@ -51,8 +52,18 @@
 
   let blockEl: HTMLDivElement | undefined = $state();
   let bubble: HTMLDivElement | undefined = $state();
+  /** column → box → points, for what may be written now. */
+  const can = $derived.by(() => {
+    const out: Partial<Record<BoxId, number>>[] = columns.map(() => ({}));
+    for (const o of options ?? []) out[o.game][o.box] = o.points;
+    return out;
+  });
   /** The chosen box, while it may be written. */
-  const open = $derived(chosen && options && options[chosen] !== undefined ? chosen : null);
+  const open = $derived(chosen && can[chosen.game]?.[chosen.box] !== undefined ? chosen : null);
+  const isOpen = (g: number, box: BoxId) => open !== null && open.game === g && open.box === box;
+  /** The columns being played: the game's own, or under the house rule every one still open. */
+  const free = $derived(isFree(st));
+  const live = (g: number) => !done && (free ? Object.keys(boxes[g] ?? {}).length < 13 : g === st.game);
   let at = $state({ left: 0, top: 0, ax: 0, above: false, ready: false });
 
   /**
@@ -121,33 +132,33 @@
     <thead>
       <tr>
         <th scope="col" class="corner">{t('gameCol')}</th>
-        {#each columns as g (g)}<th scope="col" class:cur={g === st.game && !done}>{g + 1}</th>{/each}
+        {#each columns as g (g)}<th scope="col" class:cur={live(g)}>{g + 1}</th>{/each}
       </tr>
     </thead>
     <tbody>
       {#snippet row(box: BoxId)}
         <tr>
-          <th scope="row" class="lbl" class:chosen={open === box}>
+          <th scope="row" class="lbl" class:chosen={open?.box === box}>
             {#if face[box]}<DieGlyph value={face[box]!} />{/if}
             <span>{label(box)}</span>
           </th>
           {#each columns as g (g)}
             {@const v = boxes[g]?.[box]}
-            {@const can = g === st.game && options && options[box] !== undefined}
-            <td class:cur={g === st.game && !done}>
+            {@const pts = can[g]?.[box]}
+            <td class:cur={live(g)}>
               {#if v !== undefined}
                 <span class="v" class:zero={v === 0}>{v}</span>
-              {:else if can}
-                {@const n = options![box]!}
+              {:else if pts !== undefined}
+                {@const n = pts}
                 <button
                   type="button"
                   class="cand"
                   class:nil={n === 0}
-                  class:hint={suggest === box}
-                  class:chosen={open === box}
-                  aria-pressed={open === box}
-                  aria-label={writeLabel(box, n)}
-                  onclick={(e) => onpick?.(box, e.currentTarget)}>{n}</button
+                  class:hint={suggest?.game === g && suggest?.box === box}
+                  class:chosen={isOpen(g, box)}
+                  aria-pressed={isOpen(g, box)}
+                  aria-label={columns.length > 1 ? `${writeLabel(box, n)} · ${t('gameCol')} ${g + 1}` : writeLabel(box, n)}
+                  onclick={(e) => onpick?.({ game: g, box }, e.currentTarget)}>{n}</button
                 >
               {/if}
             </td>
@@ -159,7 +170,7 @@
           <th scope="row" class="lbl">{name}</th>
           {#each columns as g (g)}
             {@const v = pick(g)}
-            <td class:cur={g === st.game && !done}>{#if v !== null}<span class="n">{v}</span>{/if}</td>
+            <td class:cur={live(g)}>{#if v !== null}<span class="n">{v}</span>{/if}</td>
           {/each}
         </tr>
       {/snippet}
@@ -175,7 +186,7 @@
     </tbody>
   </table>
   {#if open}
-    {@const n = options![open]!}
+    {@const n = can[open.game][open.box]!}
     <div
       class="confirm"
       class:above={at.above}
@@ -185,7 +196,7 @@
       style:top="{at.top}px"
       style:--ax="{at.ax}px"
     >
-      <button type="button" class="ok" aria-label={writeLabel(open, n)} onclick={(e) => onwrite?.(open, e.currentTarget)}>
+      <button type="button" class="ok" aria-label={writeLabel(open.box, n)} onclick={(e) => onwrite?.(open, e.currentTarget)}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>{t('write')}
       </button>
       <button type="button" class="x" aria-label={t('dropBox')} onclick={() => ondrop?.()}>
@@ -281,9 +292,11 @@
     font: 400 17px/1 var(--display);
     color: #ffffff;
   }
+  /* Crossed out: the line alone (the user, 2026-10-20: "the line is enough"); the 0 stays for screen
+     readers, unseen. */
   .v.zero {
     position: relative;
-    color: var(--gold);
+    color: transparent;
   }
   .v.zero::after {
     content: '';

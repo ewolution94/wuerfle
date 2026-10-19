@@ -1,8 +1,8 @@
 # Würfle
 
 The classic five-dice game for the afternoon meeting, alone or at a table with friends, at
-<https://wuerfle.ewolution.cloud>. Five cobalt glass dice you throw with a flick across the table, a
-shake of the phone or a button; the paper block with one column per game, one to six games in a row
+<https://wuerfle.ewolution.cloud>. Five cobalt glass dice you throw with a flick across the table or a
+button; the paper block with one column per game, one to six games in a row
 as it's played in Germany. German first, English beside it. Young Serif and Karla. Part of the ewolution family (Stichle,
 Stammtisch, CDNMS, Kritzle and Vollmond are its siblings).
 
@@ -29,17 +29,19 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
   takes a number from a page.
 - **Keeping:** a tap puts a die on the rail at the top; everyone sees it there before the next throw
   (the `hold` action). Bots do the same, so their keeps show for a moment before they throw.
-- **The table folds** (on a phone, `src/components/Table.svelte`): it opens big, with the block's first
-  rows below, and folds down to a strip of the five dice when the block is wanted: Write (Eintragen)
-  beside Roll after any throw, a tap on a box, or by itself after the third throw. It opens again for
-  the next turn, or with Table (Tisch) or Roll. Folded, the dice line up on the rail's row
-  (`DiceTable.fold`); the canvas keeps its full height and the tray clips it, so the drawing never
-  resizes. A wide screen has the block beside the dice and never folds.
+- **The table folds** (on a phone, `src/components/Table.svelte`): open, it takes all the room above the
+  throw, with only the players' totals below; it folds down to a strip of the five dice when the block
+  is wanted: Write (Eintragen) beside Roll after any throw, a tap on a player's name, or by itself
+  after the third throw. It opens again for the next turn, or with Table (Tisch) or Roll. Folded, the
+  dice line up on the rail's row (`DiceTable.fold`); the canvas keeps the open table's height and the
+  tray clips it, so the drawing never resizes. On a tall table the view keeps its width (the dice their
+  size) and sees deeper. A wide screen has the block beside the dice and never folds.
+- **Safe keeping:** a press that starts on a die only keeps it, however long, unless it drags 28 px; a
+  hand let go before it has travelled 40 px puts the dice back instead of throwing them. A safe zone
+  in front of the rail's bar keeps a die against the back wall from reaching over it.
 - **Writing:** a tap on a box in pencil chooses it; the gold ✓ bubble beside it, or a second tap,
-  writes it. A tap elsewhere in the block, ×, or the next throw lets it go.
-- **Shaking** (`src/lib/motion.svelte.ts`): the iPhone gives motion only after asking, and only from a
-  tap. The table asks once without one (other browsers answer at once); where that needs a tap, a
-  "Shake to roll? Allow" chip asks from its own, and so does the switch in Settings.
+  writes it (a crossed-out box shows its line, no 0). A tap elsewhere in the block, ×, or the next
+  throw lets it go.
 - **The clock** (off, 60 s or 25 s a decision): when it runs out, a bot plays the rest of the turn.
   Someone who closed the page has their turn played after 12 s.
 
@@ -64,6 +66,11 @@ As in Schmidt Spiele's current leaflet (checked against it and Hasbro's, 2026-10
   - `joker` (Hasbro's): any box any time. Each further five-alike: +100 if the Würfle box holds 50,
     and the joker placement either way: its upper box first, else any lower box at full value
     (full house 25, straights 30 and 40), else 0 in an upper box.
+- **The house rule "any column"** (`rules.free`, with two games or more; the user's family plays it):
+  every column is open from the start and a roll may go into any open box of any column; the match
+  is one run of 13 rounds per column and ends with every column full. The variants apply per column
+  (the five-alike's extra, the joker), and the basic rule's crossing out looks at every column. Off
+  by default; the switch is under the games, alone and in the lobby.
 
 The bots: the apprentice keeps the most common face and writes the most points; the journeyman (the
 default) weighs each box's points against what it's likely worth later and minds the bonus; the
@@ -120,7 +127,7 @@ server/
 src/
   App.svelte     the routes: the start, /solo, /KXPT
   components/    Home, Join, Lobby, Game (a room), SoloGame, Table, ScoreBlock, Final, Settings, Guide …
-  lib/dice.ts    the dice: three.js and cannon-es, recorded throws, the relabelling, the hand and the shake
+  lib/dice.ts    the dice: three.js and cannon-es, recorded throws, the relabelling, the hand
   lib/match.ts   what the table shows (a MatchView) and asks (a Driver), for a room or a game alone
   lib/solo.svelte.ts   a game alone in the page; lib/remote.ts the room's driver
 tests/           rules, bots, rooms
