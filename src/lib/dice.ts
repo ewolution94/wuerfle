@@ -80,6 +80,16 @@ const CALM_STEPS = 12;
 const STILL = 1;
 const LAY_STEPS = 18;
 const HAND_Y = 2.4;
+/**
+ * Shaking: the tray feels the phone's acceleration (m/s², without gravity) for as long as each motion
+ * event lasts, in world units per second (`gain`), so 60 events a second add up to what the phone did,
+ * not 60 kicks. Up and down only lifts a die that's down (the floor takes the rest). Speeds and spin
+ * are capped so the dice rattle in the tray instead of leaving it; when the shaking stops they're
+ * tossed out low with a spin, toward the middle. Measured on a firm and a wild shake (2026-10-19,
+ * plans/wuerfle.md): the dice hop at most 0.3 and 0.75 of their size and rest 0.8 to 1.3 s after;
+ * the first version's fixed kick per event sent them 140 to 270 dice high.
+ */
+const SHAKE = { gain: 3.4, lift: 0.6, spin: 0.9, maxSpeed: 7.5, maxUp: 4.2, maxSpin: 14 };
 /** Where in the hand each of n dice sits (x, y, z around the finger). */
 const CLUMP: Record<number, [number, number, number][]> = {
   1: [[0, 0, 0]],
@@ -167,7 +177,11 @@ export class DiceTable {
   #step = 0;
   #hand = { active: false, x: 0, y: 0, idx: [] as number[], samples: [] as [number, number, number][] };
   #down: { x: number; y: number; i: number | null; timer: number } | null = null;
-  #shake = { live: false, last: 0, idx: [] as number[] };
+  /**
+   * `last`: the last strong move (the shake ends 350 ms after it); `at`: the last motion event;
+   * `feel`: how much of each move each die takes, so they don't move in step.
+   */
+  #shake = { live: false, last: 0, at: 0, idx: [] as number[], feel: [1, 1, 1, 1, 1] };
   #running = false;
   #last = 0;
   #idleSince = 0;
@@ -433,9 +447,12 @@ export class DiceTable {
     const strength = Math.hypot(ax, ay, az);
     const now = performance.now();
     if (this.#shake.live) {
+      // How long this event stood for (about 1/60 s), whatever the phone's rate.
+      const dt = THREE.MathUtils.clamp((now - this.#shake.at) / 1000, 1 / 120, 1 / 20);
+      this.#shake.at = now;
       if (strength > 9) {
         this.#shake.last = now;
-        this.#jolt(ax, ay, az);
+        this.#jolt(ax, ay, az, dt, strength);
       }
       return;
     }
@@ -443,12 +460,12 @@ export class DiceTable {
     this.#finishTweens();
     const idx = this.free();
     if (!idx.length) return;
-    this.#shake = { live: true, last: now, idx };
+    this.#shake = { live: true, last: now, at: now, idx, feel: idx.map(() => rand(0.75, 1.25)) };
     for (const i of idx) {
       this.#where[i] = 'flight';
       this.#bodies[i].wakeUp();
     }
-    this.#jolt(ax, ay, az);
+    this.#jolt(ax, ay, az, 1 / 60, strength);
     this.#wake();
   }
 
@@ -771,30 +788,47 @@ export class DiceTable {
     this.#launch(h.idx, starts, true);
   }
 
-  /** The phone moved hard: the dice in the tray lag behind it (device axes to the table's). */
-  #jolt(ax: number, ay: number, az: number) {
-    for (const i of this.#shake.idx) {
+  /**
+   * The phone moved for `dt` seconds: the dice in the tray lag behind it (device axes to the table's:
+   * the phone's right is the table's right, its top the far side, its face up), capped (SHAKE).
+   */
+  #jolt(ax: number, ay: number, az: number, dt: number, strength: number) {
+    const { gain, lift, spin, maxSpeed, maxUp, maxSpin } = SHAKE;
+    this.#shake.idx.forEach((i, k) => {
       const b = this.#bodies[i];
+      const g = gain * this.#shake.feel[k];
       b.wakeUp();
-      b.velocity.x += -ax * 0.55 + rand(-1.5, 1.5);
-      b.velocity.z += ay * 0.55 + rand(-1.5, 1.5);
-      b.velocity.y += Math.min(6, Math.abs(az) * 0.3 + rand(1.5, 3));
-      b.angularVelocity.x += rand(-18, 18);
-      b.angularVelocity.z += rand(-18, 18);
-    }
+      b.velocity.x += -ax * g * dt;
+      b.velocity.z += ay * g * dt;
+      if (b.position.y < 0.62) b.velocity.y += Math.abs(az) * g * lift * dt;
+      b.angularVelocity.x += rand(-1, 1) * strength * spin * dt;
+      b.angularVelocity.z += rand(-1, 1) * strength * spin * dt;
+      const across = Math.hypot(b.velocity.x, b.velocity.z);
+      if (across > maxSpeed) {
+        b.velocity.x *= maxSpeed / across;
+        b.velocity.z *= maxSpeed / across;
+      }
+      b.velocity.y = Math.min(b.velocity.y, maxUp);
+      const turn = b.angularVelocity.length();
+      if (turn > maxSpin) b.angularVelocity.scale(maxSpin / turn, b.angularVelocity);
+    });
   }
 
-  /** The shaking stopped: the dice are thrown from where they are now. */
+  /** The shaking stopped: the dice roll out from where they are, low, spinning, toward the middle. */
   #endShake() {
     const idx = this.#shake.idx;
-    this.#shake = { live: false, last: 0, idx: [] };
+    this.#shake = { live: false, last: 0, at: 0, idx: [], feel: [1, 1, 1, 1, 1] };
+    const t = this.#tray;
+    const mid = (t.play + t.zNear) / 2;
+    const cap = (v: number) => THREE.MathUtils.clamp(v, -5, 5);
     const starts = idx.map((i) => {
       const b = this.#bodies[i];
       return {
         p: [b.position.x, Math.max(0.5, b.position.y), b.position.z],
         q: [b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w],
-        v: [b.velocity.x, b.velocity.y, b.velocity.z],
-        w: [b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z],
+        // Every die tumbles at least once, so the faces turned for the server's number never show it.
+        v: [cap(b.velocity.x) - b.position.x * 0.5, rand(2.6, 3.6), cap(b.velocity.z) + (mid - b.position.z) * 0.5],
+        w: [rand(-13, 13), rand(-13, 13), rand(-13, 13)],
       };
     });
     this.#launch(idx, starts, true);
