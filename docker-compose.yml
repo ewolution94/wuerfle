@@ -1,0 +1,9 @@
+# For trying the image locally (it builds from source). The NAS runs deploy/portainer-stack.yml.
+services:
+  wuerfle:
+    build: .
+    image: ghcr.io/ewolution94/wuerfle:latest
+    container_name: wuerfle
+    restart: unless-stopped
+    ports:
+      - "8080:8080"

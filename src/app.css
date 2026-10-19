@@ -1,0 +1,364 @@
+/* Würfle's look, the user's pick of 2026-10-19 ("the glass and color scheme of B but the more playful
+   font and ui layout/general style of A"): the score block at night. A deep navy page with the paper
+   block's squared grid in light cobalt, the cobalt band printed across the top, Barlow Condensed for
+   everything printed (labels, buttons, the band) and Kalam for everything written (scores, names,
+   hints), buttons with a hard bottom edge, gold for what you do and what you win. The dice are cobalt
+   glass (src/lib/dice.ts). Dark only: "we only need the Nacht modus" (the user, 2026-10-19).
+   Folio's tokens and elements are the bones (vendor/ewo); the tokens it shares point at these. */
+/* Folio's tokens without its faces (Geist, Fraunces): Würfle prints in Barlow Condensed, writes in
+   Kalam (src/main.ts, Latin only) and runs its text in the system face. */
+@import '../vendor/ewo/tokens/tokens.css';
+@import '../vendor/ewo/tokens/projects.css';
+@import '../vendor/ewo/tokens/base.css';
+
+:root,
+:root[data-theme='light'] {
+  /* "only": no forced light or dark from the browser. */
+  color-scheme: only dark;
+  --ewo-light: 0;
+
+  /* The night block. */
+  --night: #0b1029;
+  --night-2: #0f173f;
+  --night-3: #18225a;
+  --grid: rgb(143 165 255 / 0.07);
+  --ink: #eef1ff;
+  --ink-2: #c9d1f3;
+  --mute: #9aa6d6;
+  --line: rgb(143 165 255 / 0.22);
+  --rule: rgb(143 165 255 / 0.18);
+
+  /* The printed colours: the band's cobalt, and the same cobalt lightened for print on the night. */
+  --cobalt: #2443c4;
+  --cobalt-hi: #8fa5ff;
+  --cobalt-soft: rgb(143 165 255 / 0.4);
+  /* Gold: the throw, the bonus, the total, what you've won. */
+  --gold: #f0c75e;
+  --gold-deep: #a8862e;
+  --gold-ink: #1a1404;
+  --good: #7fd6a0;
+  --bad: #ff8a7c;
+
+  --print: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --hand: 'Kalam', 'Comic Sans MS', 'Segoe Print', cursive;
+  --shadow: 0 2px 0 var(--cobalt-soft), 0 18px 32px -18px rgb(0 0 0 / 0.8);
+
+  --gutter: clamp(16px, 3vw, 40px);
+  --page: 1100px;
+  --bar-h: 52px;
+
+  /* Folio's shared tokens, at night (its sheet, segmented and switch use these). */
+  --ewo-bg: var(--night-2);
+  --ewo-bg-raised: var(--night-3);
+  --ewo-panel: var(--night-2);
+  --ewo-fg: var(--ink);
+  --ewo-fg-2: var(--ink-2);
+  --ewo-fg-3: var(--mute);
+  --ewo-line: var(--line);
+  --ewo-line-2: rgb(143 165 255 / 0.12);
+  --ewo-line-strong: var(--cobalt-hi);
+  --ewo-fill-2: rgb(143 165 255 / 0.1);
+  --ewo-fill-3: rgb(143 165 255 / 0.16);
+  --ewo-accent: var(--cobalt-hi);
+  --ewo-accent-2: var(--gold);
+  --ewo-accent-ink: var(--night);
+  --ewo-focus: 3px solid var(--gold);
+}
+
+[data-ewo-project='wuerfle'] {
+  --ewo-accent: var(--cobalt-hi);
+  --ewo-accent-2: var(--gold);
+}
+
+html {
+  background-color: var(--night);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 16px 16px;
+  overflow-x: clip;
+}
+
+body {
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* No double-tap zoom on the iPhone on anything you tap (learnings/ios-and-webkit.md). */
+:where(button, a, label, summary, input, select, textarea, [role='button'], [role='radio']) {
+  touch-action: manipulation;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the block ---------------------------------------------------------------------------- */
+
+/* A panel: the block's paper at night, its cobalt rule and a hard edge below. */
+.sheet {
+  position: relative;
+  background: var(--night-2);
+  color: var(--ink);
+  border: 1.5px solid var(--cobalt-hi);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+}
+
+/* Printed: condensed capitals, a little spaced. */
+.print {
+  font-family: var(--print);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* Written: the hand on the block. */
+.hand {
+  font-family: var(--hand);
+  font-weight: 700;
+}
+.display {
+  font-family: var(--print);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.label {
+  font: 700 13px/1.25 var(--print);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cobalt-hi);
+}
+
+/* A button with a hard edge, as if printed and cut out; it sinks when pressed. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1.6px solid var(--cobalt-hi);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cobalt-hi);
+  font: 700 17px / 1 var(--print);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 var(--cobalt-soft);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--ewo-dur-1) var(--ewo-ease), box-shadow var(--ewo-dur-1) var(--ewo-ease), background-color var(--ewo-dur-1) var(--ewo-ease);
+}
+.btn:active:not(:disabled, [aria-disabled='true']) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--cobalt-soft);
+}
+/* The main move: gold, dark ink on it (learnings/ui-preferences.md: a bright accent gets dark text). */
+.btn.primary {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: 0 3px 0 var(--gold-deep);
+}
+.btn.primary:active:not(:disabled, [aria-disabled='true']) {
+  box-shadow: 0 1px 0 var(--gold-deep);
+}
+/* The printed band's cobalt, filled. */
+.btn.cobalt {
+  border-color: var(--cobalt);
+  background: var(--cobalt);
+  color: #ffffff;
+  box-shadow: 0 3px 0 #16298a;
+}
+.btn.cobalt:active:not(:disabled, [aria-disabled='true']) {
+  box-shadow: 0 1px 0 #16298a;
+}
+@media (hover: hover) {
+  .btn:not(.primary, .cobalt):hover:not(:disabled) {
+    background: rgb(143 165 255 / 0.08);
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: #f5d47b;
+  }
+  .btn.cobalt:hover:not(:disabled) {
+    background: #2d4fd8;
+  }
+}
+.btn.quiet {
+  min-height: 40px;
+  border-color: transparent;
+  box-shadow: none;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.btn.small {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+.btn.block {
+  width: 100%;
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.42;
+  cursor: default;
+}
+.btn:focus-visible,
+.input:focus-visible,
+.chip:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: 700 15px/1.1 var(--print);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip[aria-pressed='true'],
+.chip[aria-checked='true'] {
+  border-color: var(--cobalt-hi);
+  background: var(--cobalt);
+  color: #ffffff;
+}
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Form controls stay at 16px or more: smaller ones make iOS zoom the page. */
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--cobalt-hi);
+  border-radius: 4px;
+  background: var(--night);
+  color: var(--ink);
+  font: 700 21px / 1.2 var(--hand);
+}
+.input::placeholder {
+  color: rgb(201 209 243 / 0.45);
+  font-weight: 400;
+}
+
+.error {
+  color: var(--bad);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sure {
+  margin: 0;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pair .btn {
+  flex: 1 1 140px;
+}
+.btn.danger-fill {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: var(--gold-ink);
+  box-shadow: 0 3px 0 #a3483d;
+}
+
+/* The logo (Logo.svelte): the name printed in the band's capitals, a glass die beside it. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 21px/1 var(--print);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-scrolling] main {
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Waiting for the server (Folio's track(), src/lib/waits.ts): a little die turning over. */
+.ewo-wait-mark .die {
+  width: 1em;
+  height: 1em;
+  overflow: visible;
+  animation: tumble 1.1s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+}
+.ewo-wait-mark .die rect {
+  fill: var(--cobalt);
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+.ewo-wait-mark .die circle {
+  fill: #ffffff;
+}
+@keyframes tumble {
+  0% {
+    rotate: 0deg;
+  }
+  55%,
+  100% {
+    rotate: 90deg;
+  }
+}
+:root {
+  --ewo-wait-bubble-bg: var(--ink);
+  --ewo-wait-bubble-fg: var(--night);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ewo-wait-mark .die {
+    animation: none;
+  }
+}

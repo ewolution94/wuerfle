@@ -1,0 +1,494 @@
+// German and English. The choice lives in Settings (General → Language): System follows the
+// browser's languages, Deutsch or English pins one. Würfle speaks German first, whatever the browser
+// says, like Stichle and Stammtisch: its players are the German-speaking afternoon meeting. So with
+// nothing saved it's Deutsch, and System is saved as the word 'system' under `ewo:lang` (the family's
+// key). public/boot.js applies it before first paint. From Stammtisch's i18n.svelte.ts.
+//
+// The game's names: the five-alike box is "Würfle" in both languages (the app's own word; the
+// trademarked ones never appear), and the variants are Schmidt's "Meisterschaft" and "Grundregel"
+// and Hasbro's joker rule, named for what they do.
+
+export type Lang = 'de' | 'en';
+export type LangChoice = Lang | 'system';
+
+const KEY = 'ewo:lang';
+const DEFAULT: LangChoice = 'de';
+
+function storedChoice(): LangChoice {
+  try {
+    const stored = localStorage.getItem(KEY);
+    if (stored === 'en' || stored === 'de' || stored === 'system') return stored;
+  } catch {
+    // storage blocked: the default
+  }
+  return DEFAULT;
+}
+
+/** The first of the browser's languages the game speaks, English otherwise (as public/boot.js). */
+export function systemLang(): Lang {
+  for (const tag of navigator.languages?.length ? navigator.languages : [navigator.language]) {
+    const base = tag?.toLowerCase().slice(0, 2);
+    if (base === 'de' || base === 'en') return base;
+  }
+  return 'en';
+}
+
+const choice = storedChoice();
+export const i18n = $state({ choice, lang: choice === 'system' ? systemLang() : choice });
+
+/** Stores a choice and shows the page in that language. */
+export function setLanguage(next: LangChoice) {
+  i18n.choice = next;
+  i18n.lang = next === 'system' ? systemLang() : next;
+  document.documentElement.lang = i18n.lang;
+  try {
+    localStorage.setItem(KEY, next);
+  } catch {
+    // not kept
+  }
+}
+
+const STRINGS = {
+  de: {
+    // the frame
+    home: 'Start',
+    allApps: 'Alle Apps',
+    code: 'Tischcode',
+    connecting: 'Verbinde …',
+    reconnecting: 'Verbinde neu …',
+    gone: 'Diesen Tisch gibt es nicht mehr.',
+    back: 'Zurück',
+    you: 'Du',
+    host: 'Gastgeber',
+    bot: 'Bot',
+
+    // settings
+    settings: 'Einstellungen',
+    general: 'Allgemein',
+    language: 'Sprache',
+    langSystem: 'System',
+    sounds: 'Töne',
+    soundsHint: 'Töne',
+    shake: 'Schütteln zum Würfeln',
+    shakeHint: 'Das Handy schütteln wirft die Würfel.',
+    hintBox: 'Vorschlag im Block',
+    hintBoxHint: 'Markiert das Feld, das ein guter Spieler nähme.',
+    thisGame: 'Diese Partie',
+    stopGame: 'Partie beenden',
+    endSure: 'Die Partie für alle beenden?',
+    endYes: 'Ja, beenden',
+    keepPlaying: 'Weiterspielen',
+    leaveGame: 'Tisch verlassen',
+    leaveSure: 'Den Tisch verlassen? Ein Bot würfelt für dich weiter.',
+    leaveSureHost: 'Den Tisch verlassen? Ein Bot würfelt für dich weiter, und jemand anders wird Gastgeber.',
+    leaveYes: 'Ja, verlassen',
+    endHint: '{name} kann die Partie beenden.',
+    soloEnd: 'Spiel aufgeben',
+    soloEndSure: 'Dieses Spiel aufgeben? Es zählt nicht für deine Bilanz.',
+    soloEndYes: 'Ja, aufgeben',
+
+    // start
+    whoAreYou: 'Wer würfelt?',
+    yourName: 'Dein Name',
+    namePlaceholder: 'Name',
+    solo: 'Allein spielen',
+    soloResume: 'Weiterspielen',
+    newTable: 'Neuer Tisch',
+    joinWithCode: 'Mit Tischcode beitreten',
+    codePlaceholder: 'CODE',
+    join: 'Beitreten',
+    joinTable: 'Mit an den Tisch',
+    guide: 'So geht’s',
+    record: 'Bestes Spiel {best} · {played} gespielt',
+    recordOne: 'Bestes Spiel {best} · 1 gespielt',
+    noRoom: 'Diesen Tisch gibt es nicht (mehr).',
+    yourAvatar: 'Dein Wappen',
+
+    // solo
+    soloTitle: 'Allein spielen',
+    soloStart: 'Los geht’s',
+    opponents: 'Mitspieler',
+    opponentsNone: 'Keine',
+
+    // the lobby
+    table: 'Am Tisch',
+    watchers: 'Schauen zu',
+    tableOrder: 'In dieser Reihenfolge wird gewürfelt.',
+    invite: 'Lade Leute mit dem Code oder dem QR-Code ein.',
+    qrLabel: 'QR-Code für diesen Tisch',
+    copyLink: 'Link kopieren',
+    copied: 'Kopiert',
+    addBot: 'Bot dazu',
+    removeBot: 'Bot entfernen',
+    shuffle: 'Reihenfolge mischen',
+    start: 'Partie starten',
+    startHint: '{name} startet die Partie.',
+    sit: 'Mitspielen',
+    watch: 'Nur zuschauen',
+    makeSit: 'An den Tisch',
+    makeWatch: 'Zuschauen lassen',
+    kick: 'Rauswerfen',
+    playerActions: 'Aktionen für {name}',
+    earlier: 'Früher dran',
+    later: 'Später dran',
+    games: 'Spiele',
+    gamesHint: 'Eine Spalte im Block pro Spiel; alle Spiele zählen zusammen.',
+    rules: 'Regeln',
+    variant_meister: 'Meisterschaft',
+    variant_basis: 'Grundregel',
+    variant_joker: 'Joker',
+    variantHint_meister: 'Jedes Feld darf gestrichen werden. Jedes weitere Würfle: +50, in ein Feld, in das es passt.',
+    variantHint_basis: 'Streichen nur, wenn der Wurf nirgends passt. Jedes weitere Würfle: +50 und ein freies Feld mit seiner Höchstzahl.',
+    variantHint_joker: 'Jedes weitere Würfle: +100, erst ins passende obere Feld, sonst als Joker unten (Full House 25, Straßen 30 und 40).',
+    clock: 'Zeit pro Zug',
+    clock_off: 'Aus',
+    clock_relaxed: '60 s',
+    clock_quick: '25 s',
+    clockHint: 'Läuft sie ab, würfelt ein Bot den Zug zu Ende.',
+    bots: 'Bots',
+    level_apprentice: 'Lehrling',
+    level_journeyman: 'Geselle',
+    level_master: 'Meister',
+    levelHint_apprentice: 'würfelt wie ein Anfänger',
+    levelHint_journeyman: 'spielt solide, auf den Bonus',
+    levelHint_master: 'rechnet jeden Wurf durch',
+
+    // the table
+    roundOf: 'Spiel {game}/{games} · Runde {round}',
+    roundOfOne: 'Runde {round} von 13',
+    throw: 'Würfeln',
+    throwsLeft: 'Noch {n} Würfe',
+    throwsLeftOne: 'Noch ein Wurf',
+    hintFirst: 'Du bist dran: ziehen und loslassen',
+    hintFirstShake: 'Du bist dran: ziehen, loslassen oder schütteln',
+    hintKeep: 'antippen zum Behalten · noch {n} Würfe',
+    hintKeepOne: 'antippen zum Behalten · noch ein Wurf',
+    hintWrite: 'jetzt ein Feld im Block wählen',
+    hintTheirs: '{name} ist dran',
+    hintAuto: 'Zeit um: ein Bot würfelt für {name}',
+    hintAutoYou: 'Zeit um: ein Bot würfelt deinen Zug zu Ende',
+    hintWatching: 'Du schaust zu',
+    notYourTurn: 'Gleich bist du dran.',
+    box_ones: 'Einser',
+    box_twos: 'Zweier',
+    box_threes: 'Dreier',
+    box_fours: 'Vierer',
+    box_fives: 'Fünfer',
+    box_sixes: 'Sechser',
+    box_three: 'Dreierpasch',
+    box_four: 'Viererpasch',
+    box_full: 'Full House',
+    box_small: 'Kleine Straße',
+    box_large: 'Große Straße',
+    box_wuerfle: 'Würfle',
+    box_chance: 'Chance',
+    sumUp: 'Summe',
+    sumBonus: 'Bonus',
+    sumTop: 'Oben',
+    sumLow: 'Unten',
+    sumExtra: 'Extra',
+    sumGame: 'Gesamt',
+    gameCol: 'Spiel',
+    allGames: 'Alle Spiele',
+    writeBox: '{box}: {n} eintragen',
+    scratchBox: '{box} streichen',
+    suggested: 'Vorschlag',
+    blockOf: 'Block von {name}',
+    scored: '{name}: {box} {n}',
+
+    // the end
+    winnerIs: '{name} gewinnt',
+    winnersAre: '{names} gewinnen',
+    youWin: 'Du gewinnst!',
+    withPoints: 'mit {n} Punkten',
+    place: '{n}.',
+    again: 'Noch eine Partie',
+    toLobby: 'Zurück in die Lobby',
+    endedBy: '{name} hat die Partie beendet.',
+    endedByYou: 'Du hast die Partie beendet.',
+    endedLeft: 'Die Partie ist zu Ende: niemand war mehr da.',
+    newBest: 'Neuer Rekord!',
+    soloAgain: 'Noch ein Spiel',
+    soloDone: 'Spiel vorbei',
+
+    // how to play
+    guideTitle: 'So geht’s',
+    guideNext: 'Weiter',
+    guideBack: 'Zurück',
+    guideSkip: 'Überspringen',
+    guideDone: 'Los geht’s',
+    guide1Title: 'Würfeln',
+    guide1Text: 'Fünf Würfel, bis zu drei Würfe pro Zug. Zieh über den Tisch und lass los, schüttel das Handy oder tipp auf Würfeln.',
+    guide2Title: 'Behalten',
+    guide2Text: 'Tipp nach einem Wurf die Würfel an, die du behalten willst: Sie wandern an die Leiste. Noch mal antippen, und sie würfeln wieder mit.',
+    guide3Title: 'Eintragen',
+    guide3Text: 'Nach jedem Wurf darfst du ein Feld in deiner Spalte füllen, spätestens nach dem dritten musst du. Die Bleistiftzahlen zeigen, was der Wurf dort bringt; passt er nicht, steht da eine 0, und das Feld ist gestrichen.',
+    guide4Title: 'Oben',
+    guide4Text: 'Einser bis Sechser zählen die Augen dieser Zahl. Kommen oben 63 oder mehr zusammen, gibt es 35 Bonus: dreimal jede Zahl reicht genau.',
+    guide5Title: 'Unten',
+    guide5Text: 'Dreier- und Viererpasch zählen alle Augen. Full House (drei und zwei, verschiedene Zahlen) 25, Kleine Straße (vier in Folge) 30, Große Straße (fünf) 40, Würfle (fünf gleiche) 50, Chance alle Augen.',
+    guide6Title: 'Der Block',
+    guide6Text: '13 Runden pro Spiel, eine Spalte pro Spiel, bis zu sechs Spiele hintereinander wie auf dem Papierblock. Alle Spiele zählen zusammen; wer am meisten hat, gewinnt.',
+
+    // waits (src/lib/waits.ts)
+    wait_create: 'Der Tisch wird gedeckt …',
+    wait_join: 'Du kommst an den Tisch …',
+    wait_start: 'Die Würfel kommen …',
+    wait_seat: 'Platz wird getauscht …',
+    wait_shuffle: 'Wird gemischt …',
+    wait_stop: 'Wird beendet …',
+    wait_rematch: 'Neue Partie …',
+    wait_leave: 'Du gehst …',
+    wait_bot_add: 'Ein Bot setzt sich …',
+    wait_bot_remove: 'Der Bot geht …',
+    wait_score: 'Wird eingetragen …',
+
+    // errors
+    'error:name': 'Bitte gib einen Namen ein.',
+    'error:no-room': 'Diesen Tisch gibt es nicht (mehr).',
+    'error:room-full': 'Der Tisch ist voll.',
+    'error:table-full': 'Am Tisch ist kein Platz mehr.',
+    'error:busy': 'Gerade ist viel los. Versuch es gleich noch mal.',
+    'error:offline': 'Keine Verbindung.',
+    'error:timeout': 'Der Server antwortet nicht.',
+    'error:not-host': 'Das darf nur der Gastgeber.',
+    'error:wrong-phase': 'Das geht gerade nicht.',
+    'error:too-few': 'Es fehlt noch jemand am Tisch.',
+    'error:too-many': 'Zu viele am Tisch.',
+    'error:no-player': 'Du bist nicht mehr an diesem Tisch.',
+    'error:turn': 'Du bist gerade nicht dran.',
+    'error:autopilot': 'Ein Bot würfelt gerade deinen Zug zu Ende.',
+    'error:rolls': 'Drei Würfe sind vorbei: wähl ein Feld.',
+    'error:unrolled': 'Erst würfeln.',
+    'error:taken': 'Das Feld ist schon voll.',
+    'error:box': 'Dieses Feld geht mit diesem Wurf nicht.',
+    'error:done': 'Die Partie ist vorbei.',
+    'error:other': 'Da ist etwas schiefgegangen.',
+  },
+  en: {
+    home: 'Home',
+    allApps: 'All apps',
+    code: 'Table code',
+    connecting: 'Connecting …',
+    reconnecting: 'Reconnecting …',
+    gone: 'This table is gone.',
+    back: 'Back',
+    you: 'You',
+    host: 'Host',
+    bot: 'Bot',
+
+    settings: 'Settings',
+    general: 'General',
+    language: 'Language',
+    langSystem: 'System',
+    sounds: 'Sounds',
+    soundsHint: 'Sounds',
+    shake: 'Shake to roll',
+    shakeHint: 'Shaking the phone throws the dice.',
+    hintBox: 'Suggested box',
+    hintBoxHint: 'Marks the box a good player would take.',
+    thisGame: 'This match',
+    stopGame: 'End the match',
+    endSure: 'End the match for everyone?',
+    endYes: 'Yes, end it',
+    keepPlaying: 'Keep playing',
+    leaveGame: 'Leave the table',
+    leaveSure: 'Leave the table? A bot rolls on for you.',
+    leaveSureHost: 'Leave the table? A bot rolls on for you, and someone else becomes the host.',
+    leaveYes: 'Yes, leave',
+    endHint: '{name} can end the match.',
+    soloEnd: 'Give up this game',
+    soloEndSure: 'Give up this game? It won’t count in your record.',
+    soloEndYes: 'Yes, give up',
+
+    whoAreYou: 'Who’s rolling?',
+    yourName: 'Your name',
+    namePlaceholder: 'Name',
+    solo: 'Play alone',
+    soloResume: 'Carry on',
+    newTable: 'New table',
+    joinWithCode: 'Join with a table code',
+    codePlaceholder: 'CODE',
+    join: 'Join',
+    joinTable: 'Join the table',
+    guide: 'How to play',
+    record: 'Best game {best} · {played} played',
+    recordOne: 'Best game {best} · 1 played',
+    noRoom: 'There’s no such table (any more).',
+    yourAvatar: 'Your crest',
+
+    soloTitle: 'Play alone',
+    soloStart: 'Let’s go',
+    opponents: 'Opponents',
+    opponentsNone: 'None',
+
+    table: 'At the table',
+    watchers: 'Watching',
+    tableOrder: 'Turns go in this order.',
+    invite: 'Invite people with the code or the QR code.',
+    qrLabel: 'QR code for this table',
+    copyLink: 'Copy link',
+    copied: 'Copied',
+    addBot: 'Add a bot',
+    removeBot: 'Remove bot',
+    shuffle: 'Shuffle the order',
+    start: 'Start the match',
+    startHint: '{name} starts the match.',
+    sit: 'Play',
+    watch: 'Just watch',
+    makeSit: 'To the table',
+    makeWatch: 'Let them watch',
+    kick: 'Remove',
+    playerActions: 'Actions for {name}',
+    earlier: 'Earlier',
+    later: 'Later',
+    games: 'Games',
+    gamesHint: 'One column of the block per game; all games add up.',
+    rules: 'Rules',
+    variant_meister: 'Championship',
+    variant_basis: 'Basic',
+    variant_joker: 'Joker',
+    variantHint_meister: 'Any box may be crossed out. Every further Würfle: +50, into a box it fits.',
+    variantHint_basis: 'Cross out only when the roll fits nowhere. Every further Würfle: +50 and any open box at its top score.',
+    variantHint_joker: 'Every further Würfle: +100, into its upper box first, else as a joker below (full house 25, straights 30 and 40).',
+    clock: 'Time per turn',
+    clock_off: 'Off',
+    clock_relaxed: '60 s',
+    clock_quick: '25 s',
+    clockHint: 'When it runs out, a bot finishes the turn.',
+    bots: 'Bots',
+    level_apprentice: 'Apprentice',
+    level_journeyman: 'Journeyman',
+    level_master: 'Master',
+    levelHint_apprentice: 'rolls like a beginner',
+    levelHint_journeyman: 'plays it solid, for the bonus',
+    levelHint_master: 'works out every roll',
+
+    roundOf: 'Game {game}/{games} · Round {round}',
+    roundOfOne: 'Round {round} of 13',
+    throw: 'Roll',
+    throwsLeft: '{n} rolls left',
+    throwsLeftOne: 'One roll left',
+    hintFirst: 'Your turn: drag and let go',
+    hintFirstShake: 'Your turn: drag and let go, or shake',
+    hintKeep: 'tap to keep · {n} rolls left',
+    hintKeepOne: 'tap to keep · one roll left',
+    hintWrite: 'now pick a box in the block',
+    hintTheirs: '{name}’s turn',
+    hintAuto: 'Time’s up: a bot rolls for {name}',
+    hintAutoYou: 'Time’s up: a bot finishes your turn',
+    hintWatching: 'You’re watching',
+    notYourTurn: 'Your turn is coming.',
+    box_ones: 'Ones',
+    box_twos: 'Twos',
+    box_threes: 'Threes',
+    box_fours: 'Fours',
+    box_fives: 'Fives',
+    box_sixes: 'Sixes',
+    box_three: '3 of a kind',
+    box_four: '4 of a kind',
+    box_full: 'Full house',
+    box_small: 'Small straight',
+    box_large: 'Large straight',
+    box_wuerfle: 'Würfle',
+    box_chance: 'Chance',
+    sumUp: 'Sum',
+    sumBonus: 'Bonus',
+    sumTop: 'Upper',
+    sumLow: 'Lower',
+    sumExtra: 'Extra',
+    sumGame: 'Total',
+    gameCol: 'Game',
+    allGames: 'All games',
+    writeBox: '{box}: write {n}',
+    scratchBox: 'Cross out {box}',
+    suggested: 'Suggested',
+    blockOf: '{name}’s block',
+    scored: '{name}: {box} {n}',
+
+    winnerIs: '{name} wins',
+    winnersAre: '{names} win',
+    youWin: 'You win!',
+    withPoints: 'with {n} points',
+    place: '{n}.',
+    again: 'Another match',
+    toLobby: 'Back to the lobby',
+    endedBy: '{name} ended the match.',
+    endedByYou: 'You ended the match.',
+    endedLeft: 'The match is over: nobody was left.',
+    newBest: 'New best!',
+    soloAgain: 'Another game',
+    soloDone: 'Game over',
+
+    guideTitle: 'How to play',
+    guideNext: 'Next',
+    guideBack: 'Back',
+    guideSkip: 'Skip',
+    guideDone: 'Let’s go',
+    guide1Title: 'Rolling',
+    guide1Text: 'Five dice, up to three rolls a turn. Drag across the table and let go, shake the phone, or tap Roll.',
+    guide2Title: 'Keeping',
+    guide2Text: 'After a roll, tap the dice you want to keep: they move to the rail. Tap them again and they roll along next time.',
+    guide3Title: 'Writing',
+    guide3Text: 'After any roll you may fill one box in your column; after the third you must. The pencilled numbers show what the roll scores there; if it doesn’t fit, it’s a 0 and the box is crossed out.',
+    guide4Title: 'Upper',
+    guide4Text: 'Ones to sixes count the pips of that number. 63 or more up here earns a 35 bonus: three of each number is exactly enough.',
+    guide5Title: 'Lower',
+    guide5Text: 'Three and four of a kind count all pips. Full house (three and two, different numbers) 25, small straight (four in a row) 30, large straight (five) 40, Würfle (five alike) 50, chance all pips.',
+    guide6Title: 'The block',
+    guide6Text: '13 rounds a game, one column per game, up to six games in a row as on the paper block. All games add up; the most points wins.',
+
+    wait_create: 'Setting the table …',
+    wait_join: 'Joining the table …',
+    wait_start: 'Here come the dice …',
+    wait_seat: 'Changing seats …',
+    wait_shuffle: 'Shuffling …',
+    wait_stop: 'Ending …',
+    wait_rematch: 'New match …',
+    wait_leave: 'Leaving …',
+    wait_bot_add: 'A bot sits down …',
+    wait_bot_remove: 'The bot leaves …',
+    wait_score: 'Writing it down …',
+
+    'error:name': 'Please enter a name.',
+    'error:no-room': 'There’s no such table (any more).',
+    'error:room-full': 'The room is full.',
+    'error:table-full': 'There’s no seat left at the table.',
+    'error:busy': 'It’s busy right now. Try again in a moment.',
+    'error:offline': 'No connection.',
+    'error:timeout': 'No answer from the server.',
+    'error:not-host': 'Only the host can do that.',
+    'error:wrong-phase': 'That’s not possible right now.',
+    'error:too-few': 'Someone is still missing at the table.',
+    'error:too-many': 'Too many at the table.',
+    'error:no-player': 'You’re no longer at this table.',
+    'error:turn': 'It’s not your turn.',
+    'error:autopilot': 'A bot is finishing your turn.',
+    'error:rolls': 'Three rolls are done: pick a box.',
+    'error:unrolled': 'Roll first.',
+    'error:taken': 'That box is already filled.',
+    'error:box': 'That box doesn’t go with this roll.',
+    'error:done': 'The match is over.',
+    'error:other': 'Something went wrong.',
+  },
+} satisfies Record<Lang, Record<string, string>>;
+
+export type Key = keyof typeof STRINGS.de;
+
+/** A string in the current language, with {name} placeholders filled in. */
+export function t(key: Key, vars: Record<string, string | number> = {}): string {
+  const s = (STRINGS[i18n.lang] as Record<string, string>)[key] ?? STRINGS.de[key] ?? key;
+  return s.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ''));
+}
+
+/** An error code from the server, in words. */
+export function errorText(code: string): string {
+  const key = `error:${code}` as Key;
+  return key in STRINGS.de ? t(key) : t('error:other');
+}
+
+/** "Ben und Mia", "Ben and Mia". */
+export function names(list: string[]) {
+  if (list.length < 2) return list.join('');
+  return `${list.slice(0, -1).join(', ')} ${i18n.lang === 'de' ? 'und' : 'and'} ${list.at(-1)}`;
+}
