@@ -85,11 +85,15 @@ const HAND_Y = 2.4;
  * event lasts, in world units per second (`gain`), so 60 events a second add up to what the phone did,
  * not 60 kicks. Up and down only lifts a die that's down (the floor takes the rest). Speeds and spin
  * are capped so the dice rattle in the tray instead of leaving it; when the shaking stops they're
- * tossed out low with a spin, toward the middle. Measured on a firm and a wild shake (2026-10-19,
- * plans/wuerfle.md): the dice hop at most 0.3 and 0.75 of their size and rest 0.8 to 1.3 s after;
- * the first version's fixed kick per event sent them 140 to 270 dice high.
+ * tossed out low with a spin, toward the middle. A shake starts above `start` and goes on while moves
+ * pass `keep`; one with fewer than `moves` strong moves was a bump (the phone set down), so it throws
+ * nothing and the dice slide back. The user's middle ground (2026-10-19, plans/wuerfle.md): the
+ * first version's fixed kick per event sent the dice 140 to 270 dice high; the second needed a hard
+ * shake; this one starts on a gentle shake, and its dice hop at most about one die high on a wild one.
  */
-const SHAKE = { gain: 3.4, lift: 0.6, spin: 0.9, maxSpeed: 7.5, maxUp: 4.2, maxSpin: 14 };
+const SHAKE = { gain: 6, lift: 0.8, spin: 1.2, maxSpeed: 10, maxUp: 5.5, maxSpin: 18, start: 9, keep: 5, moves: 8 };
+type Pose = { p: THREE.Vector3; q: THREE.Quaternion };
+const STILL_HANDS = () => ({ live: false, last: 0, at: 0, idx: [] as number[], feel: [] as number[], moves: 0, from: [] as Pose[] });
 /** Where in the hand each of n dice sits (x, y, z around the finger). */
 const CLUMP: Record<number, [number, number, number][]> = {
   1: [[0, 0, 0]],
@@ -179,9 +183,10 @@ export class DiceTable {
   #down: { x: number; y: number; i: number | null; timer: number } | null = null;
   /**
    * `last`: the last strong move (the shake ends 350 ms after it); `at`: the last motion event;
-   * `feel`: how much of each move each die takes, so they don't move in step.
+   * `feel`: how much of each move each die takes, so they don't move in step; `moves`: how many strong
+   * moves so far; `from`: where the dice lay, for a bump that throws nothing.
    */
-  #shake = { live: false, last: 0, at: 0, idx: [] as number[], feel: [1, 1, 1, 1, 1] };
+  #shake = STILL_HANDS();
   #running = false;
   #last = 0;
   #idleSince = 0;
@@ -450,17 +455,26 @@ export class DiceTable {
       // How long this event stood for (about 1/60 s), whatever the phone's rate.
       const dt = THREE.MathUtils.clamp((now - this.#shake.at) / 1000, 1 / 120, 1 / 20);
       this.#shake.at = now;
-      if (strength > 9) {
+      if (strength > SHAKE.keep) {
         this.#shake.last = now;
+        this.#shake.moves++;
         this.#jolt(ax, ay, az, dt, strength);
       }
       return;
     }
-    if (strength < 14 || !this.allow.throw || this.#throwing || reduced()) return;
+    if (strength < SHAKE.start || !this.allow.throw || this.#throwing || reduced()) return;
     this.#finishTweens();
     const idx = this.free();
     if (!idx.length) return;
-    this.#shake = { live: true, last: now, at: now, idx, feel: idx.map(() => rand(0.75, 1.25)) };
+    this.#shake = {
+      live: true,
+      last: now,
+      at: now,
+      idx,
+      feel: idx.map(() => rand(0.75, 1.25)),
+      moves: 1,
+      from: idx.map((i) => ({ p: this.#meshes[i].position.clone(), q: this.#meshes[i].quaternion.clone() })),
+    };
     for (const i of idx) {
       this.#where[i] = 'flight';
       this.#bodies[i].wakeUp();
@@ -816,8 +830,21 @@ export class DiceTable {
 
   /** The shaking stopped: the dice roll out from where they are, low, spinning, toward the middle. */
   #endShake() {
-    const idx = this.#shake.idx;
-    this.#shake = { live: false, last: 0, at: 0, idx: [], feel: [1, 1, 1, 1, 1] };
+    const { idx, moves, from } = this.#shake;
+    this.#shake = STILL_HANDS();
+    // A bump, not a shake: nothing is thrown, and the dice slide back to where they lay, faces and all.
+    if (moves < SHAKE.moves) {
+      idx.forEach((i, k) => {
+        const { p, q } = from[k];
+        this.#where[i] = 'tween';
+        this.#headed[i] = p;
+        this.#tween(i, p, q, 260, 0.15, () => {
+          this.#headed[i] = null;
+          this.#toFloor(i, p, q);
+        });
+      });
+      return;
+    }
     const t = this.#tray;
     const mid = (t.play + t.zNear) / 2;
     const cap = (v: number) => THREE.MathUtils.clamp(v, -5, 5);

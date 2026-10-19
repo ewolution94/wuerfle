@@ -290,6 +290,7 @@
     const a = e.acceleration;
     if (!a || a.x === null) return;
     const [x, y, z] = [a.x ?? 0, a.y ?? 0, a.z ?? 0];
+    // A firm move opens a folded table (a phone set down doesn't); the shaking that follows rolls.
     if (folded && canThrow && Math.hypot(x, y, z) > 14) setFold(false);
     dice?.motion(x, y, z);
   }
