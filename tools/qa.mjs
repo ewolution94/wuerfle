@@ -1,9 +1,11 @@
 // Würfle QA: a host and a guest (and bots) play a whole match through the page, as people would: a
-// flick across the table (or the button), now and then a die kept with a tap, then the best box in
-// pencil; screenshots of each new stage, page overflow and console checks, and the jump check: the
-// band, the dice, the throw button, the players and the total keep their place and size every frame
-// (learnings/projects/stichle.md, "the table never moves"). Not part of CI: Playwright is borrowed
-// from Folio's checkout next door (the workspace's `folio/node_modules`, WebKit installed).
+// flick across the table (or the button), now and then a die kept with a tap, now and then the rolls
+// ended early with Write (the table folds down), then the best box in pencil, chosen and written with
+// its bubble or a second tap; screenshots of each new stage, page overflow and console checks, and
+// the jump check: the band, the dice, the throw button, the players and the total keep their place
+// and size every frame, apart from the table folding down or opening (learnings/projects/stichle.md,
+// "the table never moves"). Not part of CI: Playwright is borrowed from Folio's checkout next door
+// (the workspace's `folio/node_modules`, WebKit installed).
 //
 //   npm run build && node server/server.mjs --port 6611        (or the wuerfle-prod preview)
 //   node tools/qa.mjs [base] [outdir]          W=390 H=844 GAMES=1 BOTS=1 PEOPLE=2 by default
@@ -40,7 +42,21 @@ async function person(name) {
     const watched = ['.table .band', '.table .tray', '.table .actions', '.table .who', '.table .sheet-wrap', '.table .grand'];
     const last = new Map();
     window.__jumps = [];
+    // Folding down or opening moves everything below the band, on purpose: not a jump.
+    let folded = null;
+    let calmAt = 0;
     const tick = () => {
+      const now = performance.now();
+      const f = document.querySelector('.table')?.classList.contains('folded') ?? null;
+      if (f !== folded) {
+        folded = f;
+        calmAt = now + 700;
+      }
+      if (now < calmAt) {
+        last.clear();
+        requestAnimationFrame(tick);
+        return;
+      }
       for (const sel of watched) {
         const el = document.querySelector(sel);
         if (!el) {
@@ -70,7 +86,8 @@ async function shot(p, label) {
   const overflow = await p.page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   if (overflow > 0) problems.push(`${p.name} ${label}: the page is ${overflow}px too wide`);
   if (AUDIT) {
-    const rows = await p.page.evaluate(textAudit, { min: AUDIT });
+    // Not centred on purpose: the total written on its double rule, the final table's heads on theirs.
+    const rows = await p.page.evaluate(textAudit, { min: AUDIT, skip: ['.grand', '.final thead th'] });
     for (const r of rows) problems.push(`${p.name} ${label}: "${r.text}" in ${r.where} sits ${r.off}px off (font bias ${r.bias})`);
   }
 }
@@ -87,9 +104,13 @@ async function playTurn(p, n) {
   const page = p.page;
   const box = await page.locator('.table canvas').boundingBox();
   const throwOnce = async (k) => {
-    // As a person would: wait until the table takes a throw (the last one has landed here too).
+    // As a person would: wait until the table takes a throw (the last one has landed here too) and
+    // has opened again after the last box (a flick needs the open table; the button opens it).
     await page.waitForSelector('.throw[aria-disabled="false"]', { timeout: 10_000 });
-    if (k % 2 === 0 && box) {
+    const open = await page.waitForSelector('.table:not(.folded)', { timeout: 2500 }).then(() => true, () => false);
+    // Opening takes 0.44 s; a flick before then lands below the table.
+    if (open) await page.waitForTimeout(500);
+    if (open && k % 2 === 0 && box) {
       // A flick: press, move up and to the side quickly, let go.
       await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.75);
       await page.mouse.down();
@@ -111,10 +132,34 @@ async function playTurn(p, n) {
     await page.waitForTimeout(400);
     if ((await page.locator('.throw[aria-disabled="false"]').count()) > 0) await throwOnce(n + 1);
   }
+  // Now and then the rolls end early: Write folds the table down to the block (on a phone; a wide
+  // screen has the block beside the dice and no fold, so a box is just picked).
+  if (n % 3 === 0 && (await page.locator('.fold').count()) > 0 && (await page.locator('.throw[aria-disabled="false"]').count()) > 0) {
+    await page.locator('.fold').click();
+    await page.waitForSelector('.table.folded');
+    await page.waitForTimeout(500);
+    if (!stages.has('early')) {
+      stages.add('early');
+      await shot(p, 'early-write');
+    }
+  }
   const cands = await page.locator('.cand').evaluateAll((els) => els.map((e, i) => ({ i, n: Number(e.textContent) })));
   const best = cands.sort((a, b) => b.n - a.n)[0];
   await page.locator('.cand').nth(best.i).click();
+  if (n % 4 === 2) {
+    // A second tap on the chosen box writes it.
+    await page.locator('.cand.chosen').click();
+    return;
+  }
+  await page.waitForSelector('.confirm.ready');
+  if (!stages.has('bubble')) {
+    stages.add('bubble');
+    await page.waitForTimeout(450);
+    await shot(p, 'bubble');
+  }
+  await page.locator('.confirm .ok').click();
 }
+const stages = new Set();
 
 async function whoseTurn(p) {
   return p.page.evaluate(() => document.querySelector('.hint')?.textContent ?? '');

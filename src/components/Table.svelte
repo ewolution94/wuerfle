@@ -3,9 +3,13 @@
   (src/lib/dice.ts), the throw button with the throws left, the players' totals, and the block
   (ScoreBlock.svelte). The same for a room and a solo game: a MatchView to show, a Driver to ask.
 
-  Nothing above or below the block changes height while you play, so the table never moves under a
-  finger (learnings/projects/stichle.md); what changes is the hint over the dice and the block's
-  pencil.
+  On a phone the table is big and the block shows its first rows; the table folds down to a strip of
+  the five dice when the block is wanted (the fold button, a tap on a box, by itself after the third
+  roll) and opens again for the next throw (the user's pick after their iPhone test, 2026-10-19,
+  development/plans/wuerfle/table.html). Apart from that, nothing changes height while you play, so
+  the table never moves under a finger (learnings/projects/stichle.md). A box you tap is chosen
+  first; the bubble beside it, or a second tap, writes it. On a wide screen the block sits beside the
+  dice and nothing folds.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -15,6 +19,7 @@
   import type { DiceTable, Fling } from '../lib/dice';
   import { errorText, t } from '../lib/i18n.svelte';
   import type { Driver, MatchView } from '../lib/match';
+  import { motion, setShaking, shakeWith, shouldAsk } from '../lib/motion.svelte';
   import { prefs } from '../lib/prefs.svelte';
   import { play, unlockOnGesture } from '../lib/sound.svelte';
   import Avatar from './Avatar.svelte';
@@ -44,6 +49,14 @@
   let matchId = '';
   /** Whose block is open: yours, or a player you tapped. */
   let shown = $state(-1);
+  /** The table folded down to a strip of the dice, the block taking the room (phones only). */
+  let folded = $state(false);
+  /** The block beside the dice (a wide screen): nothing folds. */
+  let side = $state(false);
+  /** The folded strip's height: as much of the canvas as shows the rail's row (DiceTable.stripHeight). */
+  let stripH = $state(124);
+  /** The box you tapped, waiting for its ✓ (or a second tap). */
+  let chosen: BoxId | null = $state(null);
 
   const s = $derived(match.state);
   const me = $derived(match.me);
@@ -64,7 +77,7 @@
     if (me < 0) return t('hintTheirs', { name: turnName });
     if (match.autopilot >= 0) return match.autopilot === me ? t('hintAutoYou') : t('hintAuto', { name: turnName });
     if (s.turn !== me) return t('hintTheirs', { name: turnName });
-    if (s.roll === 0) return prefs.shake && motionReady ? t('hintFirstShake') : t('hintFirst');
+    if (s.roll === 0) return prefs.shake && motion.live ? t('hintFirstShake') : t('hintFirst');
     if (s.roll >= 3) return t('hintWrite');
     const n = 3 - s.roll;
     return n === 1 ? t('hintKeepOne') : t('hintKeep', { n });
@@ -75,6 +88,14 @@
   let gone = false;
   onMount(() => {
     unlockOnGesture();
+    const wide = matchMedia('(min-width: 980px) and (min-height: 620px)');
+    const onwide = () => {
+      side = wide.matches;
+      if (side) setFold(false);
+    };
+    onwide();
+    wide.addEventListener('change', onwide);
+    const unshake = shakeWith(onMotion);
     void import('../lib/dice').then(({ DiceTable }) => {
       if (gone) return;
       dice = new DiceTable({
@@ -89,15 +110,19 @@
         flying = false;
         const d = s.dice;
         if (d.every((v) => v > 0 && v === d[0])) play.wuerfle();
+        // Your last throw: the block comes up by itself.
+        if (myTurn && s.roll >= 3) setTimeout(() => myTurn && s.roll >= 3 && setFold(true), 380);
       },
       });
       ready = true;
     });
     return () => {
       gone = true;
+      wide.removeEventListener('change', onwide);
+      unshake();
+      clearTimeout(unfoldTimer);
       dice?.destroy();
       dice = null;
-      stopMotion();
     };
   });
 
@@ -133,8 +158,9 @@
     dice.setHeld(s.roll > 0 && s.roll < 3 ? hold : NONE);
   });
 
-  // A new turn: nothing kept, the dice back on the table; your turn has its sound.
+  // A new turn: nothing kept, the dice back on the table, the table open; your turn has its sound.
   let turnKey = '';
+  let unfoldTimer = 0;
   $effect(() => {
     const key = `${match.id}:${s.game}:${s.round}:${s.turn}`;
     if (key === turnKey) return;
@@ -143,6 +169,11 @@
     if (s.roll === 0) {
       mine = [...NONE];
       if (!first) dice?.setHeld(NONE);
+    }
+    chosen = null;
+    if (!first && folded) {
+      clearTimeout(unfoldTimer);
+      unfoldTimer = window.setTimeout(() => setFold(false), 700);
     }
     if (!first && s.turn === me && !over) {
       play.yourTurn();
@@ -174,6 +205,7 @@
 
   function onthrow(fling: Fling | null) {
     if (!myTurn) return;
+    chosen = null;
     pending = true;
     flying = Boolean(fling);
     error = '';
@@ -196,13 +228,38 @@
     driver.hold([...mine]);
   }
 
+  /** Folded, Roll opens the table first and throws once the dice are back on it. */
   function throwNow() {
     if (!canThrow) return;
+    if (folded) {
+      setFold(false);
+      setTimeout(() => canThrow && !folded && dice?.throwFromEdge(), 420);
+      return;
+    }
     dice?.throwFromEdge();
+  }
+
+  function setFold(on: boolean) {
+    if (side) on = false;
+    clearTimeout(unfoldTimer);
+    if (on === folded) return;
+    if (on && dice) stripH = dice.stripHeight();
+    folded = on;
+    dice?.fold(on);
+    if (!on) chosen = null;
+  }
+
+  /** A box tapped: chosen (and the block up), or written when it already was. */
+  function pick(box: BoxId, from: Element) {
+    if (!canWrite) return;
+    if (chosen === box) return write(box, from);
+    chosen = box;
+    setFold(true);
   }
 
   function write(box: BoxId, from: Element) {
     if (!canWrite) return;
+    chosen = null;
     pending = true;
     error = '';
     driver
@@ -229,36 +286,23 @@
 
   // ---- shaking the phone -------------------------------------------------------------------
 
-  let motionReady = $state(false);
-  let motionAsked = false;
-  const onMotion = (e: DeviceMotionEvent) => {
+  function onMotion(e: DeviceMotionEvent) {
     const a = e.acceleration;
-    if (a && a.x !== null) dice?.motion(a.x ?? 0, a.y ?? 0, a.z ?? 0);
-  };
-  function startMotion() {
-    if (motionReady) return;
-    addEventListener('devicemotion', onMotion);
-    motionReady = true;
+    if (!a || a.x === null) return;
+    const [x, y, z] = [a.x ?? 0, a.y ?? 0, a.z ?? 0];
+    if (folded && canThrow && Math.hypot(x, y, z) > 14) setFold(false);
+    dice?.motion(x, y, z);
   }
-  function stopMotion() {
-    removeEventListener('devicemotion', onMotion);
-    motionReady = false;
+  /** The chip's answer: from this tap iOS shows its prompt. */
+  async function allowShake() {
+    const r = await setShaking(true);
+    if (r === 'granted') flash(t('shakeOn'));
+    else if (r === 'denied') flash(t('shakeDenied'));
   }
-  /** iOS asks for motion once, and only from a tap; elsewhere it just starts. */
-  function askMotion() {
-    if (!prefs.shake || motionReady || motionAsked || typeof DeviceMotionEvent === 'undefined') return;
-    const ask = (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission;
-    motionAsked = true;
-    if (!ask) return startMotion();
-    ask().then((answer) => answer === 'granted' && startMotion(), () => {});
-  }
-  $effect(() => {
-    if (!prefs.shake) stopMotion();
-    else if (typeof DeviceMotionEvent !== 'undefined' && !('requestPermission' in DeviceMotionEvent)) startMotion();
-  });
+  const asking = $derived(shouldAsk() && me >= 0 && !over && !folded);
 </script>
 
-<div class="table" class:watching={me < 0}>
+<div class="table" class:watching={me < 0} class:folded style:--strip-h="{stripH}px">
   <header class="band">
     <span class="app">Würfle</span>
     <span class="round">
@@ -269,16 +313,21 @@
     <ewo-settings-button onclick={onsettings}></ewo-settings-button>
   </header>
 
-  <!-- The first tap at the table is iOS's moment to ask for motion (shaking to roll). -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="tray" ontouchend={askMotion} onpointerup={askMotion}>
+  <div class="tray">
     <canvas
       bind:this={canvas}
       tabindex="0"
       aria-label={t('throw')}
       onkeydown={keys}
     ></canvas>
-    <p class="hint" class:alert={error !== ''} aria-live="polite">{error || hint}</p>
+    <p class="hint" class:alert={error !== ''} class:hidden={asking && !error} aria-live="polite">{error || hint}</p>
+    {#if asking && !error}
+      <div class="ask">
+        <span>{t('shakeAsk')}</span>
+        <button type="button" class="allow" onclick={allowShake}>{t('shakeAllow')}</button>
+        <button type="button" class="later" onclick={() => setShaking(false)}>{t('shakeLater')}</button>
+      </div>
+    {/if}
   </div>
 
   <div class="actions">
@@ -286,6 +335,13 @@
     <span class="left" role="img" aria-label={myTurn ? (3 - s.roll === 1 ? t('throwsLeftOne') : t('throwsLeft', { n: 3 - s.roll })) : ''}>
       {#each [0, 1, 2] as k (k)}<i class:on={!over && k < 3 - s.roll && (myTurn || s.turn >= 0)}></i>{/each}
     </span>
+    {#if !side}
+      <!-- After a throw of yours this is how you stop rolling: the block comes up to write a box. -->
+      <button type="button" class="btn small fold" class:cobalt={!folded && canWrite} aria-expanded={folded} onclick={() => setFold(!folded)}>
+        {folded ? t('foldUp') : canWrite ? t('foldWrite') : t('foldDown')}
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg>
+      </button>
+    {/if}
   </div>
 
   <nav class="who" aria-label={t('blockOf', { name: '' })}>
@@ -299,7 +355,7 @@
   </nav>
 
   <div class="sheet-wrap">
-    <ScoreBlock state={s} seat={blockSeat} {options} {suggest} onwrite={write} />
+    <ScoreBlock state={s} seat={blockSeat} {options} {suggest} {chosen} onpick={pick} onwrite={write} ondrop={() => (chosen = null)} />
   </div>
 
   <div class="grand">
@@ -310,20 +366,28 @@
 
 <style>
   /* The screen, top to bottom: the band, the dice, the throw, the players, the block (which takes what's
-     left and scrolls inside), the total. On a wide screen the dice go left and the block right. */
+     left and scrolls inside), the total. The open table leaves the block its first four rows; folded,
+     the table is a strip of the dice (--strip-h) and the block has the rest. The canvas keeps the open
+     table's height and the tray clips it, so folding never resizes the drawing. On a wide screen the
+     dice go left and the block right, and nothing folds. */
   .table {
-    --tray-h: clamp(250px, 38dvh, 360px);
+    --tray-wide: max(250px, calc(100dvh - 370px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+    --tray-h: var(--tray-wide);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto var(--tray-h) auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
     grid-template-areas: 'band' 'tray' 'actions' 'who' 'sheet' 'grand';
     height: 100dvh;
     max-width: 560px;
     margin: 0 auto;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+  .table.folded {
+    --tray-h: var(--strip-h);
+  }
   @media (min-width: 980px) and (min-height: 620px) {
     .table {
+      --tray-wide: 100%;
       --tray-h: auto;
       max-width: 1240px;
       grid-template-columns: minmax(0, 1fr) 440px;
@@ -348,15 +412,11 @@
     --ewo-fill-2: rgb(255 255 255 / 0.14);
   }
   .app {
-    font: 700 21px/1 var(--print);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font: 400 22px/1 var(--display);
   }
   .round {
     margin-left: auto;
-    font: 600 15px/1 var(--print);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font: 600 14.5px/1 var(--text);
     font-variant-numeric: tabular-nums lining-nums;
     white-space: nowrap;
   }
@@ -365,6 +425,9 @@
     grid-area: tray;
     position: relative;
     min-height: 0;
+    height: var(--tray-h);
+    overflow: hidden;
+    transition: height 0.44s cubic-bezier(0.3, 0.8, 0.25, 1);
   }
   .tray::after {
     content: '';
@@ -375,9 +438,11 @@
     pointer-events: none;
   }
   canvas {
+    position: absolute;
+    inset: 0 0 auto;
     display: block;
     width: 100%;
-    height: 100%;
+    height: var(--tray-wide);
     touch-action: none;
     cursor: grab;
     outline: none;
@@ -395,16 +460,62 @@
     bottom: 14px;
     margin: 0;
     text-align: center;
-    font: 400 16px/1.2 var(--hand);
+    font: 500 15px/1.2 var(--text);
     color: rgb(200 212 255 / 0.85);
     pointer-events: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: opacity 0.2s;
   }
   .hint.alert {
     color: var(--gold);
     font-weight: 700;
+  }
+  .hint.hidden,
+  .folded .hint:not(.alert) {
+    opacity: 0;
+  }
+
+  /* The ask for shaking, from a tap (src/lib/motion.svelte.ts). */
+  .ask {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    translate: -50% 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 4px 14px;
+    border: 1.5px solid var(--gold);
+    border-radius: 999px;
+    background: rgb(11 16 41 / 0.86);
+    color: var(--ink);
+    font: 600 14.5px/1 var(--text);
+    white-space: nowrap;
+  }
+  .ask button {
+    min-height: 34px;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ask .allow {
+    padding: 0 14px;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font: 400 15.5px/1 var(--display);
+  }
+  .ask .later {
+    padding: 0 10px;
+    background: none;
+    color: var(--mute);
+    font: 500 13.5px/1 var(--text);
+  }
+  .ask button:focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
   }
 
   .actions {
@@ -416,8 +527,25 @@
     height: 64px;
   }
   .throw {
-    min-width: 170px;
+    min-width: 150px;
     font-size: 19px;
+  }
+  .fold {
+    gap: 6px;
+    padding: 0 12px;
+  }
+  .fold svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: rotate 0.44s cubic-bezier(0.3, 0.8, 0.25, 1);
+  }
+  .folded .fold svg {
+    rotate: 180deg;
   }
   .left {
     display: inline-flex;
@@ -450,7 +578,7 @@
     padding: 0;
     border: 0;
     background: none;
-    font: 400 16px/1 var(--hand);
+    font: 600 15px/1 var(--text);
     color: var(--cobalt-hi);
     -webkit-tap-highlight-color: transparent;
   }
@@ -502,8 +630,8 @@
     border-bottom: 3px double var(--cobalt-hi);
   }
   .grand span {
-    font: 700 16px/1 var(--print);
-    letter-spacing: 0.1em;
+    font: 700 12.5px/1 var(--text);
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--cobalt-hi);
     white-space: nowrap;
@@ -511,7 +639,7 @@
     text-overflow: ellipsis;
   }
   .grand b {
-    font: 700 30px/1 var(--hand);
+    font: 400 28px/1 var(--display);
     color: var(--gold);
     font-variant-numeric: tabular-nums lining-nums;
   }

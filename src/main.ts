@@ -1,10 +1,11 @@
 import './app.css';
-// The faces, Latin only (German included): Barlow Condensed prints, Kalam writes.
-import '@fontsource/barlow-condensed/latin-500.css';
-import '@fontsource/barlow-condensed/latin-600.css';
-import '@fontsource/barlow-condensed/latin-700.css';
-import '@fontsource/kalam/latin-400.css';
-import '@fontsource/kalam/latin-700.css';
+// The faces, Latin only (German included): Young Serif for the name, the buttons and the numbers,
+// Karla for everything else (look C's type, the user's pick of 2026-10-19).
+import '@fontsource/young-serif/latin-400.css';
+import '@fontsource/karla/latin-400.css';
+import '@fontsource/karla/latin-500.css';
+import '@fontsource/karla/latin-600.css';
+import '@fontsource/karla/latin-700.css';
 import './lib/scrolling';
 // Folio's shared elements (vendor/ewo); each defines itself once.
 import '../vendor/ewo/elements/settings-button.js';

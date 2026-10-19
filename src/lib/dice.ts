@@ -89,7 +89,8 @@ const CLUMP: Record<number, [number, number, number][]> = {
   5: [[-0.66, 0, -0.66], [0.66, 0.12, -0.66], [-0.66, 0.2, 0.66], [0.66, 0.05, 0.66], [0, 1.02, 0]],
 };
 
-type Where = 'floor' | 'hand' | 'rail' | 'tween' | 'flight';
+/** 'row': a free die lined up on the rail's row while the table is folded (`fold`), without a ring. */
+type Where = 'floor' | 'hand' | 'rail' | 'row' | 'tween' | 'flight';
 
 interface Recording {
   idx: number[];
@@ -160,6 +161,7 @@ export class DiceTable {
   #headed: (THREE.Vector3 | null)[] = [null, null, null, null, null];
   #tray = { xh: 3.5, zFar: -3, zNear: 3, rail: -2.4, play: -1.6 };
   #tweens: Tween[] = [];
+  #folded = false;
   #flight: Flight | null = null;
   #recording: [number, number][] | null = null;
   #step = 0;
@@ -312,6 +314,10 @@ export class DiceTable {
         this.#toRail(i, false, v);
         continue;
       }
+      if (this.#folded) {
+        this.#toRow(i, false, v);
+        continue;
+      }
       const showing = this.#where[i] === 'floor' && this.#topValue(i) === v;
       if (showing) continue;
       const p = this.#where[i] === 'floor' ? this.#meshes[i].position.clone() : this.#freeSpot(i);
@@ -321,12 +327,40 @@ export class DiceTable {
     this.#draw();
   }
 
-  /** Kept dice to the rail, let go ones back onto the table, animated. */
+  /** Kept dice to the rail, let go ones back onto the table, animated. Folded, they stay in the row. */
   setHeld(held: boolean[]) {
     for (let i = 0; i < 5; i++) {
-      if (held[i] && this.#where[i] === 'floor') this.#toRail(i, true);
-      else if (!held[i] && this.#where[i] === 'rail') this.#fromRail(i);
+      if (held[i] && (this.#where[i] === 'floor' || this.#where[i] === 'row')) this.#toRail(i, true);
+      else if (!held[i] && this.#where[i] === 'rail') {
+        if (this.#folded) this.#toRow(i, true);
+        else this.#fromRail(i);
+      }
     }
+  }
+
+  /**
+   * The table folded down to a strip so the block has the room: every die lines up on the rail's row
+   * (the kept ones with their ring), which the strip shows; unfolded, the free ones go back to where
+   * they lay. A die in the air lines up when it lands. Nothing is thrown from the row: the page
+   * unfolds first.
+   */
+  fold(on: boolean) {
+    if (on === this.#folded) return;
+    this.#folded = on;
+    this.#finishTweens();
+    for (let i = 0; i < 5; i++) {
+      if (on && this.#where[i] === 'floor') this.#toRow(i, true);
+      else if (!on && this.#where[i] === 'row') this.#fromRail(i);
+    }
+  }
+
+  /** How much of the canvas, from its top, the folded strip needs to show the rail's row whole. */
+  stripHeight() {
+    const h = this.#o.canvas.clientHeight || 1;
+    // The lowest point of a die on the rail on screen: its near bottom edge, with its ring round it.
+    this.#camera.updateMatrixWorld();
+    const p = new THREE.Vector3(0, 0, this.#tray.rail + 0.8).project(this.#camera);
+    return Math.ceil(((1 - p.y) / 2) * h) + 10;
   }
 
   /** The dice the next throw takes: those not on the rail. */
@@ -372,6 +406,7 @@ export class DiceTable {
   /** Someone else's throw (a person on their phone, a bot, a stand-in): played the same way here. */
   replay(t: Throw) {
     this.#finishFlight();
+    this.#finishTweens();
     for (let i = 0; i < 5; i++) if (t.held[i]) this.#toRail(i, false, t.dice[i]);
     const idx = [0, 1, 2, 3, 4].filter((i) => !t.held[i]);
     if (!idx.length) return;
@@ -451,7 +486,7 @@ export class DiceTable {
     this.#rail.position.set(0, 0.08, t.play - 0.06);
     for (let i = 0; i < 5; i++) {
       this.#rings[i].position.set(this.#slotX(i), 0.012, t.rail);
-      if (this.#where[i] === 'rail') this.#meshes[i].position.set(this.#slotX(i), 0.5, t.rail);
+      if (this.#where[i] === 'rail' || this.#where[i] === 'row') this.#meshes[i].position.set(this.#slotX(i), 0.5, t.rail);
       // A die the new walls leave outside comes back in.
       if (this.#where[i] === 'floor') {
         const p = this.#meshes[i].position;
@@ -619,6 +654,10 @@ export class DiceTable {
     for (let i = 0; i < 5; i++) {
       if (held[i] || !dice[i]) continue;
       this.#values[i] = dice[i];
+      if (this.#folded) {
+        this.#toRow(i, false, dice[i]);
+        continue;
+      }
       const p = this.#where[i] === 'floor' || this.#where[i] === 'flight' ? this.#meshes[i].position.clone() : this.#freeSpot(i);
       p.y = 0.5;
       this.#toFloor(i, p, this.#upright(i, dice[i], rand(-0.5, 0.5)));
@@ -640,6 +679,7 @@ export class DiceTable {
     for (const i of rec.idx) {
       this.#where[i] = 'floor';
       this.#values[i] = this.#topValue(i);
+      if (this.#folded) this.#toRow(i, true);
     }
     this.#o.onrest?.();
   }
@@ -765,11 +805,15 @@ export class DiceTable {
   /** To the rail, number up: `value` when the server says which, else the one on top now. */
   #toRail(i: number, animate: boolean, value?: number) {
     const m = this.#meshes[i];
-    if (this.#where[i] === 'rail') {
+    if (this.#where[i] === 'rail' || this.#where[i] === 'row') {
       if (value && value !== this.#values[i]) {
         this.#values[i] = value;
         m.quaternion.copy(this.#upright(i, value));
       }
+      // Kept while folded: it's in its slot already, and gets its ring.
+      this.#where[i] = 'rail';
+      this.#rings[i].visible = true;
+      this.#draw();
       return;
     }
     if (this.#where[i] === 'floor') this.#rest[i] = m.position.clone().setY(0.5);
@@ -793,6 +837,38 @@ export class DiceTable {
       this.#where[i] = 'rail';
       this.#rings[i].visible = true;
     });
+  }
+
+  /** Into its slot on the rail's row, number up, without a ring: a free die while folded. */
+  #toRow(i: number, animate: boolean, value?: number) {
+    const m = this.#meshes[i];
+    this.#rings[i].visible = false;
+    if (this.#where[i] === 'rail' || this.#where[i] === 'row') {
+      if (value && value !== this.#values[i]) {
+        this.#values[i] = value;
+        m.quaternion.copy(this.#upright(i, value));
+      }
+      this.#where[i] = 'row';
+      this.#draw();
+      return;
+    }
+    if (this.#where[i] === 'floor') this.#rest[i] = m.position.clone().setY(0.5);
+    const body = this.#bodies[i];
+    if (this.#world.bodies.includes(body)) this.#world.removeBody(body);
+    const v = value || (this.#where[i] === 'floor' ? this.#topValue(i) : this.#values[i]);
+    this.#values[i] = v;
+    const p = new THREE.Vector3(this.#slotX(i), 0.5, this.#tray.rail);
+    const q = this.#upright(i, v);
+    if (!animate || reduced()) {
+      m.position.copy(p);
+      m.quaternion.copy(q);
+      this.#where[i] = 'row';
+      this.#draw();
+      return;
+    }
+    this.#where[i] = 'tween';
+    this.#headed[i] = null;
+    this.#tween(i, p, q, 340, 0.5, () => (this.#where[i] = 'row'));
   }
 
   #fromRail(i: number, animate = true) {
@@ -830,7 +906,7 @@ export class DiceTable {
   #freeSpot(i: number) {
     const t = this.#tray;
     const taken = this.#meshes
-      .map((m, j) => (j === i || this.#where[j] === 'rail' ? null : this.#where[j] === 'tween' && this.#headed[j] ? this.#headed[j] : m.position))
+      .map((m, j) => (j === i || this.#where[j] === 'rail' || this.#where[j] === 'row' ? null : this.#where[j] === 'tween' && this.#headed[j] ? this.#headed[j] : m.position))
       .filter((p): p is THREE.Vector3 => Boolean(p));
     for (let tries = 0; tries < 80; tries++) {
       const old = tries === 0 ? this.#rest[i] : null;
@@ -894,7 +970,8 @@ export class DiceTable {
     clearTimeout(d.timer);
     this.#down = null;
     if (this.#hand.active) return this.#release();
-    if (d.i !== null && this.allow.keep && (this.#where[d.i] === 'floor' || this.#where[d.i] === 'rail')) this.#o.onkeep(d.i);
+    const w = d.i !== null ? this.#where[d.i] : null;
+    if (d.i !== null && this.allow.keep && (w === 'floor' || w === 'rail' || w === 'row')) this.#o.onkeep(d.i);
     else if (!this.allow.throw && !this.allow.keep) this.#o.onrefuse?.();
   };
 

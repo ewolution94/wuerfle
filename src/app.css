@@ -1,12 +1,12 @@
 /* Würfle's look, the user's pick of 2026-10-19 ("the glass and color scheme of B but the more playful
    font and ui layout/general style of A"): the score block at night. A deep navy page with the paper
-   block's squared grid in light cobalt, the cobalt band printed across the top, Barlow Condensed for
-   everything printed (labels, buttons, the band) and Kalam for everything written (scores, names,
-   hints), buttons with a hard bottom edge, gold for what you do and what you win. The dice are cobalt
-   glass (src/lib/dice.ts). Dark only: "we only need the Nacht modus" (the user, 2026-10-19).
-   Folio's tokens and elements are the bones (vendor/ewo); the tokens it shares point at these. */
-/* Folio's tokens without its faces (Geist, Fraunces): Würfle prints in Barlow Condensed, writes in
-   Kalam (src/main.ts, Latin only) and runs its text in the system face. */
+   block's squared grid in light cobalt, the cobalt band across the top, buttons with a hard bottom
+   edge, gold for what you do and what you win. The dice are cobalt glass (src/lib/dice.ts). Dark only:
+   "we only need the Nacht modus" (the user, 2026-10-19). The type is look C's ("lets try the font from
+   C", the user after their iPhone test, 2026-10-19): Young Serif for the name, the buttons, headings
+   and every number; Karla for labels, names, hints and text. Folio's tokens and elements are the
+   bones (vendor/ewo); the tokens it shares point at these. */
+/* Folio's tokens without its faces (Geist, Fraunces): Würfle's two are in src/main.ts, Latin only. */
 @import '../vendor/ewo/tokens/tokens.css';
 @import '../vendor/ewo/tokens/projects.css';
 @import '../vendor/ewo/tokens/base.css';
@@ -39,15 +39,18 @@
   --good: #7fd6a0;
   --bad: #ff8a7c;
 
-  --print: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
-  --hand: 'Kalam', 'Comic Sans MS', 'Segoe Print', cursive;
+  /* Young Serif has one weight: no faux bold where a rule asks for 700 (html below). */
+  --display: 'Young Serif', Georgia, 'Times New Roman', serif;
+  --text: 'Karla', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --shadow: 0 2px 0 var(--cobalt-soft), 0 18px 32px -18px rgb(0 0 0 / 0.8);
 
   --gutter: clamp(16px, 3vw, 40px);
   --page: 1100px;
   --bar-h: 52px;
 
-  /* Folio's shared tokens, at night (its sheet, segmented and switch use these). */
+  /* Folio's shared tokens, at night (its sheet, segmented and switch use these), in Würfle's faces. */
+  --ewo-sans: var(--text);
+  --ewo-serif: var(--display);
   --ewo-bg: var(--night-2);
   --ewo-bg-raised: var(--night-3);
   --ewo-panel: var(--night-2);
@@ -75,11 +78,13 @@ html {
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 16px 16px;
   overflow-x: clip;
+  font-synthesis: none;
 }
 
 body {
   background: transparent;
   color: var(--ink);
+  font-family: var(--text);
   font-size: 15px;
 }
 
@@ -119,28 +124,16 @@ button {
   box-shadow: var(--shadow);
 }
 
-/* Printed: condensed capitals, a little spaced. */
-.print {
-  font-family: var(--print);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-/* Written: the hand on the block. */
-.hand {
-  font-family: var(--hand);
-  font-weight: 700;
-}
+/* Headings: Young Serif, as it comes. */
 .display {
-  font-family: var(--print);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--display);
+  font-weight: 400;
 }
 
+/* Small printed labels: Karla's capitals, spaced (look C's column heads). */
 .label {
-  font: 700 13px/1.25 var(--print);
-  letter-spacing: 0.12em;
+  font: 700 12.5px/1.25 var(--text);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--cobalt-hi);
 }
@@ -157,9 +150,7 @@ button {
   border-radius: 6px;
   background: transparent;
   color: var(--cobalt-hi);
-  font: 700 17px / 1 var(--print);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 400 17px / 1 var(--display);
   text-decoration: none;
   white-space: nowrap;
   box-shadow: 0 3px 0 var(--cobalt-soft);
@@ -238,9 +229,7 @@ button {
   border-radius: 6px;
   background: transparent;
   color: var(--ink-2);
-  font: 700 15px/1.1 var(--print);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 700 15px/1.1 var(--text);
   -webkit-tap-highlight-color: transparent;
 }
 .chip[aria-pressed='true'],
@@ -263,7 +252,7 @@ button {
   border-radius: 4px;
   background: var(--night);
   color: var(--ink);
-  font: 700 21px / 1.2 var(--hand);
+  font: 500 19px / 1.2 var(--text);
 }
 .input::placeholder {
   color: rgb(201 209 243 / 0.45);
@@ -297,14 +286,12 @@ button {
   box-shadow: 0 3px 0 #a3483d;
 }
 
-/* The logo (Logo.svelte): the name printed in the band's capitals, a glass die beside it. */
+/* The logo (Logo.svelte): the name in Young Serif, a glass die beside it. */
 .logo {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font: 700 21px/1 var(--print);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font: 400 22px/1 var(--display);
   color: #ffffff;
   white-space: nowrap;
 }

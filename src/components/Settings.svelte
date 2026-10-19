@@ -10,7 +10,8 @@
   import { themeShift } from '../../vendor/ewo/elements/theme-shift.js';
   import { ApiError } from '../lib/api';
   import { errorText, i18n, setLanguage, systemLang, t, type LangChoice } from '../lib/i18n.svelte';
-  import { prefs, setHint, setShake } from '../lib/prefs.svelte';
+  import { setShaking } from '../lib/motion.svelte';
+  import { prefs, setHint } from '../lib/prefs.svelte';
   import type { Room } from '../lib/room.svelte';
   import { play, setSound, sound } from '../lib/sound.svelte';
   import { ui } from '../lib/ui.svelte';
@@ -36,6 +37,8 @@
   const hostName = $derived(view?.players.find((p) => p.id === view.host)?.name ?? '');
   let sure: 'end' | 'leave' | 'giveup' | null = $state(null);
   let error = $state('');
+  /** The phone said no to motion when shaking was switched on. */
+  let shakeRefused = $state(false);
   $effect(() => {
     if (!open) {
       sure = null;
@@ -139,8 +142,16 @@
         ></ewo-switch>
       </div>
       <div class="row">
-        <span class="name">{t('shake')}<small>{t('shakeHint')}</small></span>
-        <ewo-switch checked={prefs.shake} aria-label={t('shake')} onchange={(e) => setShake(e.detail.checked)}></ewo-switch>
+        <span class="name">{t('shake')}<small>{shakeRefused ? t('shakeDenied') : t('shakeHint')}</small></span>
+        <!-- Switching it on is a tap, so iOS may show its prompt from here. -->
+        <ewo-switch
+          checked={prefs.shake}
+          aria-label={t('shake')}
+          onchange={(e) => {
+            shakeRefused = false;
+            void setShaking(e.detail.checked).then((r) => (shakeRefused = e.detail.checked && r === 'denied'));
+          }}
+        ></ewo-switch>
       </div>
       <div class="row">
         <span class="name">{t('hintBox')}<small>{t('hintBoxHint')}</small></span>

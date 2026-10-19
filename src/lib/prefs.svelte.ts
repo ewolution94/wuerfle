@@ -1,6 +1,7 @@
 // What this device prefers, kept on it: whether shaking the phone throws the dice (on by default;
-// iOS asks for motion once, on the first tap at the table), and whether the block marks the box a
-// good player would write (off by default). Kept in localStorage; blocked storage means the defaults.
+// on the iPhone it also needs the phone's yes, src/lib/motion.svelte.ts), and whether the block marks
+// the box a good player would write (off by default). Kept in localStorage; blocked storage means the
+// defaults.
 
 const SHAKE = 'wuerfle:shake';
 const HINT = 'wuerfle:hint';

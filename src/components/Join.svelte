@@ -100,8 +100,8 @@
     gap: 8px;
   }
   .file b {
-    font: 700 20px/1 var(--print);
-    letter-spacing: 0.16em;
+    font: 400 20px/1 var(--display);
+    letter-spacing: 0.14em;
     color: #ffffff;
   }
   h1 {

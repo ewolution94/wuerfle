@@ -23,9 +23,9 @@
 
 <style>
   .clock {
-    font: 700 15px/1 var(--print);
+    font: 400 15px/1 var(--display);
     font-variant-numeric: lining-nums tabular-nums;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.02em;
     padding: 4px 8px 3px;
     border-radius: 4px;
     background: var(--night);

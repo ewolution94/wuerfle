@@ -53,8 +53,10 @@
           <tr class:me={s.seat === match.me}>
             <td class="place">{t('place', { n: s.place })}</td>
             <td class="who">
-              {#if p?.avatar}<Avatar avatar={p.avatar} size={24} ring={false} />{/if}
-              <span>{nameAt(s.seat)}</span>
+              <div class="name">
+                {#if p?.avatar}<Avatar avatar={p.avatar} size={24} ring={false} />{/if}
+                <span>{nameAt(s.seat)}</span>
+              </div>
             </td>
             {#if games > 1}
               {#each match.totals[s.seat]?.games ?? [] as n, g (g)}<td class="g">{n}</td>{/each}
@@ -103,7 +105,7 @@
   }
   .points {
     margin: 0;
-    font: 700 22px/1.2 var(--hand);
+    font: 400 22px/1.2 var(--display);
     color: var(--gold);
   }
   .best {
@@ -111,8 +113,8 @@
     padding: 4px 10px 2px;
     border: 1.6px solid var(--gold);
     border-radius: 4px;
-    font: 700 15px/1.2 var(--print);
-    letter-spacing: 0.12em;
+    font: 700 12.5px/1.2 var(--text);
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--gold);
     rotate: -3deg;
@@ -125,8 +127,8 @@
   }
   th {
     padding: 0 4px 6px;
-    font: 700 13px/1 var(--print);
-    letter-spacing: 0.1em;
+    font: 700 12px/1 var(--text);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--cobalt-hi);
     border-bottom: 1.5px solid var(--cobalt-hi);
@@ -141,39 +143,44 @@
   }
   .place {
     width: 28px;
-    font: 700 16px/1 var(--print);
+    font: 400 16px/1 var(--display);
     color: var(--cobalt-hi);
     text-align: center;
   }
   .who {
     text-align: left;
   }
-  .who :global(ewo-emblem) {
-    vertical-align: middle;
-    margin-right: 6px;
+  /* The avatar and the name centred together, not set on the cell's line. */
+  .who .name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
   }
   .who span {
-    font: 700 18px/1 var(--hand);
+    font: 600 17px/1 var(--text);
     color: var(--ink);
   }
   .g {
     width: 40px;
     text-align: center;
-    font: 400 17px/1 var(--hand);
+    font: 400 16px/1 var(--display);
     color: var(--ink-2);
   }
   th.g {
-    font: 700 13px/1 var(--print);
+    font: 700 12px/1 var(--text);
+    letter-spacing: 0.12em;
     color: var(--cobalt-hi);
   }
   .sum {
     width: 64px;
     text-align: right;
-    font: 700 21px/1 var(--hand);
+    font: 400 20px/1 var(--display);
     color: var(--gold);
   }
   th.sum {
-    font: 700 12px/1 var(--print);
+    font: 700 11.5px/1 var(--text);
+    letter-spacing: 0.12em;
     color: var(--cobalt-hi);
   }
   .actions {

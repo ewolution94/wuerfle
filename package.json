@@ -16,8 +16,8 @@
     "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
-    "@fontsource/barlow-condensed": "^5.3.0",
-    "@fontsource/kalam": "^5.3.0",
+    "@fontsource/karla": "^5.3.0",
+    "@fontsource/young-serif": "^5.3.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tsconfig/svelte": "^5.0.8",
     "@types/three": "^0.186.0",

@@ -62,7 +62,7 @@
     border-radius: 4px;
     background: rgb(255 255 255 / 0.16);
     color: #ffffff;
-    font: 700 16px/1 var(--print);
-    letter-spacing: 0.18em;
+    font: 400 16px/1 var(--display);
+    letter-spacing: 0.14em;
   }
 </style>

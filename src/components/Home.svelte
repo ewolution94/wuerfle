@@ -214,7 +214,7 @@
   .record {
     margin: 0;
     text-align: center;
-    font: 400 17px/1.3 var(--hand);
+    font: 400 15.5px/1.35 var(--text);
     color: var(--gold);
   }
   .row {
@@ -224,7 +224,7 @@
   .code {
     flex: 1;
     min-width: 0;
-    font: 700 21px/1.2 var(--print);
+    font: 400 22px/1.2 var(--display);
     letter-spacing: 0.3em;
     text-transform: uppercase;
   }

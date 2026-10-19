@@ -318,8 +318,8 @@
     gap: 10px;
   }
   .code {
-    font: 700 46px/1 var(--print);
-    letter-spacing: 0.16em;
+    font: 400 44px/1 var(--display);
+    letter-spacing: 0.12em;
     color: #ffffff;
   }
   .share {
@@ -333,7 +333,7 @@
   }
   .url {
     overflow-wrap: anywhere;
-    font: 400 14px/1.4 var(--hand);
+    font: 400 13.5px/1.4 var(--text);
     color: var(--ink-2);
   }
   h2 {
@@ -361,7 +361,7 @@
     border-bottom: 1px solid var(--rule);
     background: none;
     color: var(--ink);
-    font: 700 19px/1.2 var(--hand);
+    font: 600 17px/1.2 var(--text);
     text-align: left;
   }
   button.player:hover {
@@ -381,8 +381,8 @@
     padding: 3px 7px 2px;
     border-radius: 4px;
     background: rgb(143 165 255 / 0.12);
-    font: 700 12px/1.2 var(--print);
-    letter-spacing: 0.08em;
+    font: 700 11.5px/1.2 var(--text);
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--cobalt-hi);
   }
@@ -393,7 +393,7 @@
   }
   .chair {
     width: 22px;
-    font: 700 16px/1 var(--print);
+    font: 400 16px/1 var(--display);
     text-align: center;
     color: var(--cobalt-hi);
   }
@@ -421,7 +421,7 @@
     border-top: 1px solid var(--rule);
   }
   .value {
-    font: 700 20px/1.2 var(--hand);
+    font: 400 18px/1.2 var(--display);
     color: #ffffff;
   }
   .howto {

@@ -50,8 +50,8 @@
     border-radius: 999px;
     background: var(--cobalt);
     color: #ffffff;
-    font: 700 13px/1 var(--print);
-    letter-spacing: 0.08em;
+    font: 700 12.5px/1 var(--text);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
   .maker::part(legend) {
@@ -66,9 +66,7 @@
     border-radius: 6px;
     background: transparent;
     color: var(--cobalt-hi);
-    font: 700 15px / 1.2 var(--print);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font: 400 16px / 1.2 var(--display);
     -webkit-tap-highlight-color: transparent;
     transition: transform var(--ewo-dur-1) var(--ewo-ease);
   }

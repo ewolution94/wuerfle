@@ -3,7 +3,7 @@
 The classic five-dice game for the afternoon meeting, alone or at a table with friends, at
 <https://wuerfle.ewolution.cloud>. Five cobalt glass dice you throw with a flick across the table, a
 shake of the phone or a button; the paper block with one column per game, one to six games in a row
-as it's played in Germany. German first, English beside it. Part of the ewolution family (Stichle,
+as it's played in Germany. German first, English beside it. Young Serif and Karla. Part of the ewolution family (Stichle,
 Stammtisch, CDNMS, Kritzle and Vollmond are its siblings).
 
 The name is the app's own: "würfeln" with the family's Swabian -le. The five-alike box is called
@@ -29,6 +29,17 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
   takes a number from a page.
 - **Keeping:** a tap puts a die on the rail at the top; everyone sees it there before the next throw
   (the `hold` action). Bots do the same, so their keeps show for a moment before they throw.
+- **The table folds** (on a phone, `src/components/Table.svelte`): it opens big, with the block's first
+  rows below, and folds down to a strip of the five dice when the block is wanted: Write (Eintragen)
+  beside Roll after any throw, a tap on a box, or by itself after the third throw. It opens again for
+  the next turn, or with Table (Tisch) or Roll. Folded, the dice line up on the rail's row
+  (`DiceTable.fold`); the canvas keeps its full height and the tray clips it, so the drawing never
+  resizes. A wide screen has the block beside the dice and never folds.
+- **Writing:** a tap on a box in pencil chooses it; the gold ✓ bubble beside it, or a second tap,
+  writes it. A tap elsewhere in the block, ×, or the next throw lets it go.
+- **Shaking** (`src/lib/motion.svelte.ts`): the iPhone gives motion only after asking, and only from a
+  tap. The table asks once without one (other browsers answer at once); where that needs a tap, a
+  "Shake to roll? Allow" chip asks from its own, and so does the switch in Settings.
 - **The clock** (off, 60 s or 25 s a decision): when it runs out, a bot plays the rest of the turn.
   Someone who closed the page has their turn played after 12 s.
 

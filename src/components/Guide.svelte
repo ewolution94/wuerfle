@@ -81,9 +81,7 @@
   ewo-guide::part(next) {
     border-radius: 6px;
     box-shadow: 0 3px 0 var(--gold-deep);
-    font: 700 18px/1 var(--print);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font: 400 17px/1 var(--display);
   }
   .page {
     display: flex;
@@ -159,12 +157,12 @@
   }
   .lbl {
     text-align: left;
-    font: 500 17px/1 var(--print);
+    font: 500 15.5px/1 var(--text);
     color: var(--ink-2);
   }
   .pencil,
   .zero {
-    font: 400 22px/1 var(--hand);
+    font: 400 20px/1 var(--display);
     color: var(--cobalt-hi);
     border-left: 1px solid var(--rule);
     background: rgb(143 165 255 / 0.09);
@@ -175,7 +173,7 @@
     text-decoration-thickness: 2px;
   }
   .tag {
-    font: 700 20px/1 var(--hand);
+    font: 400 18px/1 var(--display);
     color: var(--gold);
   }
   .cols {
@@ -186,7 +184,8 @@
   .cols span {
     padding: 10px 0 70px;
     border-left: 1px solid var(--rule);
-    font: 700 16px/1 var(--print);
+    font: 700 12.5px/1 var(--text);
+    letter-spacing: 0.12em;
     color: var(--cobalt-hi);
   }
   .cols span.cur {

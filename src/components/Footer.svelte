@@ -18,8 +18,8 @@
     max-width: var(--page);
     margin: 0 auto;
     padding: 20px var(--gutter) 40px;
-    font: 600 14px / 1.4 var(--print);
-    letter-spacing: 0.1em;
+    font: 600 12.5px / 1.4 var(--text);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--mute);
   }

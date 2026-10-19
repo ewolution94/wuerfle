@@ -1,43 +1,118 @@
 <!--
   The block, as on paper: the boxes down the side, one column per game of the match (1 to 6, the
   host's choice), the sums where the paper block has them. The current game's column is tinted; while
-  you may write, its open boxes show in pencil what the dice would score there, and a tap writes it.
+  you may write, its open boxes show in pencil what the dice would score there. A tap chooses a box; the
+  gold bubble beside it (or a second tap) writes it, a tap anywhere else in the block or × lets it go
+  (the user, after their iPhone test, 2026-10-19: "a confirm floating button ... next to it").
   The header stays while the rows scroll (the table keeps its height: everything else on the screen
   is fixed, learnings/projects/stichle.md "the table never moves").
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { sheet } from '../../server/rules.mjs';
   import { LOWER, UPPER, type BoxId, type GameSheet, type MatchState } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
   import DieGlyph from './DieGlyph.svelte';
 
   let {
-    state,
+    state: st,
     seat,
     options = null,
     suggest = null,
+    chosen = null,
+    onpick,
     onwrite,
+    ondrop,
   }: {
     state: MatchState;
     seat: number;
     /** What you may write now and what it scores; null when you may not. */
     options?: Partial<Record<BoxId, number>> | null;
     suggest?: BoxId | null;
+    /** The box tapped, waiting for its ✓. */
+    chosen?: BoxId | null;
+    onpick?: (box: BoxId, from: Element) => void;
     onwrite?: (box: BoxId, from: Element) => void;
+    ondrop?: () => void;
   } = $props();
 
-  const columns = $derived(Array.from({ length: state.games }, (_, g) => g));
-  const boxes = $derived(state.boxes[seat] ?? []);
+  const columns = $derived(Array.from({ length: st.games }, (_, g) => g));
+  const boxes = $derived(st.boxes[seat] ?? []);
   /** Each column's sums, as the rules add them (the bonus, the five-alikes' extra). */
-  const games = $derived(columns.map((g) => sheet(state, seat, g) as GameSheet));
+  const games = $derived(columns.map((g) => sheet(st, seat, g) as GameSheet));
   const anyExtra = $derived(games.some((g) => g.extra > 0));
-  const done = $derived(state.phase === 'done');
+  const done = $derived(st.phase === 'done');
 
   const label = (box: BoxId) => t(`box_${box}` as Parameters<typeof t>[0]);
   const face: Partial<Record<BoxId, number>> = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
+  const writeLabel = (box: BoxId, n: number) => (n === 0 ? t('scratchBox', { box: label(box) }) : t('writeBox', { box: label(box), n }));
+
+  // ---- the bubble ----------------------------------------------------------------------------
+
+  let blockEl: HTMLDivElement | undefined = $state();
+  let bubble: HTMLDivElement | undefined = $state();
+  /** The chosen box, while it may be written. */
+  const open = $derived(chosen && options && options[chosen] !== undefined ? chosen : null);
+  let at = $state({ left: 0, top: 0, ax: 0, above: false, ready: false });
+
+  /**
+   * The bubble under the chosen box, centred on it, or above it near the block's bottom edge; with
+   * `reveal`, the block scrolls so the box and its bubble show (below the header that stays).
+   */
+  function place(reveal: boolean) {
+    const b = blockEl;
+    const el = bubble;
+    const c = b?.querySelector<HTMLElement>('.cand.chosen');
+    if (!b || !el || !c) return;
+    const head = b.querySelector('thead')?.getBoundingClientRect().height ?? 30;
+    let br = b.getBoundingClientRect();
+    let cr = c.getBoundingClientRect();
+    const h = el.offsetHeight;
+    if (reveal) {
+      const top = cr.top - br.top + b.scrollTop;
+      if (top - head - 6 < b.scrollTop) b.scrollTop = top - head - 6;
+      else if (top + cr.height + h + 14 > b.scrollTop + b.clientHeight) b.scrollTop = Math.min(top + cr.height + h + 14 - b.clientHeight, top - head - 6);
+      br = b.getBoundingClientRect();
+      cr = c.getBoundingClientRect();
+    }
+    const top = cr.top - br.top + b.scrollTop;
+    const cx = cr.left - br.left + b.scrollLeft + cr.width / 2;
+    const w = el.offsetWidth;
+    const left = Math.min(Math.max(6, cx - w / 2), b.clientWidth - w - 6);
+    let y = top + cr.height + 8;
+    const above = y + h > b.scrollTop + b.clientHeight - 4;
+    if (above) y = top - h - 8;
+    at = { left, top: y, ax: cx - left, above, ready: true };
+  }
+
+  $effect(() => {
+    if (!open || !bubble) return;
+    place(true);
+  });
+
+  onMount(() => {
+    // The block grows as the table folds down: the box stays in view, the bubble with it.
+    const ro = new ResizeObserver(() => open && place(true));
+    if (blockEl) ro.observe(blockEl);
+    return () => ro.disconnect();
+  });
+
+  function onblockclick(e: MouseEvent) {
+    if (!(e.target as Element).closest('button')) ondrop?.();
+  }
 </script>
 
-<div class="block" tabindex="-1">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+  class="block"
+  tabindex="-1"
+  role="region"
+  aria-label={t('gameCol')}
+  bind:this={blockEl}
+  onclick={onblockclick}
+  onkeydown={(e) => e.key === 'Escape' && ondrop?.()}
+  onscroll={() => open && place(false)}
+>
   <table>
     <colgroup>
       <col class="lbl" />
@@ -46,20 +121,20 @@
     <thead>
       <tr>
         <th scope="col" class="corner">{t('gameCol')}</th>
-        {#each columns as g (g)}<th scope="col" class:cur={g === state.game && !done}>{g + 1}</th>{/each}
+        {#each columns as g (g)}<th scope="col" class:cur={g === st.game && !done}>{g + 1}</th>{/each}
       </tr>
     </thead>
     <tbody>
       {#snippet row(box: BoxId)}
         <tr>
-          <th scope="row" class="lbl">
+          <th scope="row" class="lbl" class:chosen={open === box}>
             {#if face[box]}<DieGlyph value={face[box]!} />{/if}
             <span>{label(box)}</span>
           </th>
           {#each columns as g (g)}
             {@const v = boxes[g]?.[box]}
-            {@const can = g === state.game && options && options[box] !== undefined}
-            <td class:cur={g === state.game && !done}>
+            {@const can = g === st.game && options && options[box] !== undefined}
+            <td class:cur={g === st.game && !done}>
               {#if v !== undefined}
                 <span class="v" class:zero={v === 0}>{v}</span>
               {:else if can}
@@ -69,8 +144,10 @@
                   class="cand"
                   class:nil={n === 0}
                   class:hint={suggest === box}
-                  aria-label={n === 0 ? t('scratchBox', { box: label(box) }) : t('writeBox', { box: label(box), n })}
-                  onclick={(e) => onwrite?.(box, e.currentTarget)}>{n}</button
+                  class:chosen={open === box}
+                  aria-pressed={open === box}
+                  aria-label={writeLabel(box, n)}
+                  onclick={(e) => onpick?.(box, e.currentTarget)}>{n}</button
                 >
               {/if}
             </td>
@@ -82,7 +159,7 @@
           <th scope="row" class="lbl">{name}</th>
           {#each columns as g (g)}
             {@const v = pick(g)}
-            <td class:cur={g === state.game && !done}>{#if v !== null}<span class="n">{v}</span>{/if}</td>
+            <td class:cur={g === st.game && !done}>{#if v !== null}<span class="n">{v}</span>{/if}</td>
           {/each}
         </tr>
       {/snippet}
@@ -97,10 +174,30 @@
       {@render sum(t('sumGame'), (g) => (Object.keys(boxes[g] ?? {}).length ? (games[g]?.total ?? null) : null), 'total')}
     </tbody>
   </table>
+  {#if open}
+    {@const n = options![open]!}
+    <div
+      class="confirm"
+      class:above={at.above}
+      class:ready={at.ready}
+      bind:this={bubble}
+      style:left="{at.left}px"
+      style:top="{at.top}px"
+      style:--ax="{at.ax}px"
+    >
+      <button type="button" class="ok" aria-label={writeLabel(open, n)} onclick={(e) => onwrite?.(open, e.currentTarget)}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>{t('write')}
+      </button>
+      <button type="button" class="x" aria-label={t('dropBox')} onclick={() => ondrop?.()}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
   .block {
+    position: relative;
     height: 100%;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -139,7 +236,7 @@
     height: 30px;
     background: var(--night-2);
     color: var(--cobalt-hi);
-    font: 700 13px/1 var(--print);
+    font: 700 12px/1 var(--text);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     border-bottom: 1.5px solid var(--cobalt-hi);
@@ -155,7 +252,7 @@
   th.lbl {
     padding-left: 10px;
     text-align: left;
-    font: 500 16px/1 var(--print);
+    font: 500 15.5px/1 var(--text);
     color: var(--ink-2);
     white-space: nowrap;
     overflow: hidden;
@@ -170,14 +267,18 @@
     gap: 6px;
     border-left: 0;
   }
+  /* The numbers on their own line, not on the cell's Karla line: their middle is the cell's. */
   td {
     position: relative;
+    line-height: 0;
   }
   td.cur {
     background: rgb(143 165 255 / 0.09);
   }
   .v {
-    font: 700 19px/1 var(--hand);
+    display: inline-block;
+    vertical-align: top;
+    font: 400 17px/1 var(--display);
     color: #ffffff;
   }
   .v.zero {
@@ -202,7 +303,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    font: 400 19px/1 var(--hand);
+    font: 400 17px/1 var(--display);
     color: var(--cobalt-hi);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -216,9 +317,90 @@
     text-decoration-thickness: 2px;
     text-underline-offset: 4px;
   }
+  .cand.chosen {
+    color: var(--gold);
+    background: rgb(240 199 94 / 0.14);
+    box-shadow: inset 0 0 0 2px var(--gold);
+  }
+  th.lbl.chosen {
+    color: var(--gold);
+  }
   .cand:focus-visible {
     outline: 2px solid var(--gold);
     outline-offset: -3px;
+  }
+
+  /* The ✓ for the chosen box: gold, like the throw, pointing at its box. */
+  .confirm {
+    position: absolute;
+    z-index: 2;
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 10px;
+    background: var(--gold);
+    color: var(--gold-ink);
+    box-shadow: 0 3px 0 var(--gold-deep), 0 14px 26px -8px rgb(0 0 0 / 0.75);
+    visibility: hidden;
+  }
+  .confirm.ready {
+    visibility: visible;
+    animation: pop 0.2s cubic-bezier(0.3, 0.8, 0.25, 1) both;
+  }
+  .confirm::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--ax) - 7px);
+    top: -6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    background: var(--gold);
+    rotate: 45deg;
+  }
+  .confirm.above::before {
+    top: auto;
+    bottom: -6px;
+  }
+  .confirm button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .confirm .ok {
+    gap: 7px;
+    padding: 0 14px;
+    font: 400 16px/1 var(--display);
+    white-space: nowrap;
+  }
+  .confirm .x {
+    padding: 0 12px;
+    border-left: 1px solid rgb(26 20 4 / 0.22);
+  }
+  .confirm svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .confirm button:focus-visible {
+    outline: 3px solid var(--night);
+    outline-offset: -4px;
+    border-radius: 8px;
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      scale: 0.9;
+    }
   }
   @media (hover: hover) {
     .cand:hover {
@@ -226,8 +408,8 @@
     }
   }
   .sum th.lbl {
-    font: 700 13px/1 var(--print);
-    letter-spacing: 0.1em;
+    font: 700 11.5px/1 var(--text);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--cobalt-hi);
   }
@@ -239,14 +421,18 @@
     background-color: rgb(143 165 255 / 0.12);
   }
   .n {
-    font: 700 16px/1 var(--print);
+    display: inline-block;
+    vertical-align: top;
+    font: 400 15.5px/1 var(--display);
     color: var(--ink);
   }
   .bonus .n {
     color: var(--gold);
   }
+  /* The double rule under the total takes 3 px at the bottom: as much on top keeps the number centred. */
   .total td,
   .total th {
+    padding-top: 3px;
     border-bottom: 3px double var(--cobalt-hi);
   }
 </style>
