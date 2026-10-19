@@ -188,7 +188,8 @@ export class DiceTable {
     if (r) {
       r.setPixelRatio(Math.min(devicePixelRatio, 2));
       r.shadowMap.enabled = true;
-      r.shadowMap.type = THREE.PCFSoftShadowMap;
+      // three r186 dropped PCFSoftShadowMap (it fell back to this with a warning).
+      r.shadowMap.type = THREE.PCFShadowMap;
       r.toneMapping = THREE.ACESFilmicToneMapping;
       r.toneMappingExposure = 1.15;
       r.outputColorSpace = THREE.SRGBColorSpace;

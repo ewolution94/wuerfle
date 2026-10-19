@@ -50,8 +50,9 @@
   const over = $derived(match.over || s.phase === 'done');
   const myTurn = $derived(!over && s.turn === me && match.autopilot !== me);
   const held = $derived(myTurn ? mine : match.hold);
-  const canThrow = $derived(myTurn && s.roll < 3 && !pending && !flying);
-  const canKeep = $derived(myTurn && s.roll >= 1 && s.roll < 3 && !pending && !flying);
+  // Not before the dice's chunk has come: a tap would do nothing (a slow connection, the first seconds).
+  const canThrow = $derived(ready && myTurn && s.roll < 3 && !pending && !flying);
+  const canKeep = $derived(ready && myTurn && s.roll >= 1 && s.roll < 3 && !pending && !flying);
   const canWrite = $derived(myTurn && s.roll >= 1 && !pending && !flying);
   const blockSeat = $derived(shown >= 0 ? shown : me >= 0 ? me : s.turn);
   const options = $derived(canWrite && blockSeat === me ? (allowed(s, me) as Partial<Record<BoxId, number>>) : null);
