@@ -11,7 +11,7 @@
   import { themeShift } from '../../vendor/ewo/elements/theme-shift.js';
   import { ApiError } from '../lib/api';
   import { errorText, i18n, setLanguage, systemLang, t, type LangChoice } from '../lib/i18n.svelte';
-  import { prefs, setHint } from '../lib/prefs.svelte';
+  import { prefs, setHint, setMarks } from '../lib/prefs.svelte';
   import type { Room } from '../lib/room.svelte';
   import { play, setSound, sound } from '../lib/sound.svelte';
   import { ui } from '../lib/ui.svelte';
@@ -142,6 +142,10 @@
       <div class="row">
         <span class="name">{t('hintBox')}<small>{t('hintBoxHint')}</small></span>
         <ewo-switch checked={prefs.hint} aria-label={t('hintBox')} onchange={(e) => setHint(e.detail.checked)}></ewo-switch>
+      </div>
+      <div class="row">
+        <span class="name">{t('marks')}<small>{t('marksHint')}</small></span>
+        <ewo-switch checked={prefs.marks} aria-label={t('marks')} onchange={(e) => setMarks(e.detail.checked)}></ewo-switch>
       </div>
     </section>
   {/if}

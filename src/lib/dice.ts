@@ -86,7 +86,7 @@ const FLICK = 40;
 /** The camera's aspect below which the view grows taller instead of the dice smaller. */
 const TALL = 0.8;
 /** World units between the rail's bar and the play area's back wall. */
-const SAFE_ZONE = 0.62;
+const SAFE_ZONE = 0.95;
 /** Where in the hand each of n dice sits (x, y, z around the finger). */
 const CLUMP: Record<number, [number, number, number][]> = {
   1: [[0, 0, 0]],

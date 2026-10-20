@@ -39,6 +39,10 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
 - **Safe keeping:** a press that starts on a die only keeps it, however long, unless it drags 28 px; a
   hand let go before it has travelled 40 px puts the dice back instead of throwing them. A safe zone
   in front of the rail's bar keeps a die against the back wall from reaching over it.
+- **Pencil marks** (a device setting, Settings → "Plus und Minus oben", off by default): each written
+  upper box shows, small in its corner, how far it is above or below three of its number ("+4",
+  "−3"), and the upper sum shows where the column stands for the 63, as the user pencilled them on the
+  paper block.
 - **Writing:** a tap on a box in pencil chooses it; the gold ✓ bubble beside it, or a second tap,
   writes it (a crossed-out box shows its line, no 0). A tap elsewhere in the block, ×, or the next
   throw lets it go.

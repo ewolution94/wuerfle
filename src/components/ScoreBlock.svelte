@@ -12,6 +12,7 @@
   import { isFree, sheet } from '../../server/rules.mjs';
   import { LOWER, UPPER, type BoxId, type GameSheet, type MatchState } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
+  import { prefs } from '../lib/prefs.svelte';
   import DieGlyph from './DieGlyph.svelte';
 
   let {
@@ -46,6 +47,14 @@
 
   const label = (box: BoxId) => t(`box_${box}` as Parameters<typeof t>[0]);
   const face: Partial<Record<BoxId, number>> = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
+  /** The paper block's pencilled "+4" and "−3": a written upper box against three of its number. */
+  const signed = (d: number) => (d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '');
+  const par = (box: BoxId, v: number) => signed(v - 3 * face[box]!);
+  /** The upper boxes written so far in a column, against three of each: where it stands for the 63. */
+  const standing = (g: number) => {
+    const written = UPPER.filter((b) => boxes[g]?.[b] !== undefined);
+    return written.length && written.length < 6 ? written.reduce((n, b) => n + boxes[g][b]! - 3 * face[b]!, 0) : null;
+  };
   const writeLabel = (box: BoxId, n: number) => (n === 0 ? t('scratchBox', { box: label(box) }) : t('writeBox', { box: label(box), n }));
 
   // ---- the bubble ----------------------------------------------------------------------------
@@ -145,9 +154,11 @@
           {#each columns as g (g)}
             {@const v = boxes[g]?.[box]}
             {@const pts = can[g]?.[box]}
-            <td class:cur={live(g)}>
+            {@const m = v !== undefined && prefs.marks && face[box] ? par(box, v) : ''}
+            <td class:cur={live(g)} class:marked={m !== ''}>
               {#if v !== undefined}
                 <span class="v" class:zero={v === 0}>{v}</span>
+                {#if m}<span class="par" class:up={v > 3 * face[box]!} aria-hidden="true">{m}</span>{/if}
               {:else if pts !== undefined}
                 {@const n = pts}
                 <button
@@ -165,18 +176,21 @@
           {/each}
         </tr>
       {/snippet}
-      {#snippet sum(name: string, pick: (i: number) => string | number | null, cls = '')}
+      {#snippet sum(name: string, pick: (i: number) => string | number | null, cls = '', marks = false)}
         <tr class="sum {cls}">
           <th scope="row" class="lbl">{name}</th>
           {#each columns as g (g)}
             {@const v = pick(g)}
-            <td class:cur={live(g)}>{#if v !== null}<span class="n">{v}</span>{/if}</td>
+            {@const m = marks && prefs.marks ? standing(g) : null}
+            <td class:cur={live(g)} class:marked={Boolean(m)}
+              >{#if v !== null}<span class="n">{v}</span>{/if}{#if m}<span class="par" class:up={m > 0} aria-hidden="true">{signed(m)}</span>{/if}</td
+            >
           {/each}
         </tr>
       {/snippet}
 
       {#each UPPER as box (box)}{@render row(box)}{/each}
-      {@render sum(t('sumUp'), (g) => (UPPER.some((b) => boxes[g]?.[b] !== undefined) ? (games[g]?.up ?? null) : null))}
+      {@render sum(t('sumUp'), (g) => (UPPER.some((b) => boxes[g]?.[b] !== undefined) ? (games[g]?.up ?? null) : null), '', true)}
       {@render sum(t('sumBonus'), (g) => (games[g]?.bonus == null ? null : games[g].bonus ? '+35' : '0'), 'bonus')}
       {@render sum(t('sumTop'), (g) => (UPPER.some((b) => boxes[g]?.[b] !== undefined) ? (games[g]?.top ?? null) : null))}
       {#each LOWER as box (box)}{@render row(box)}{/each}
@@ -308,6 +322,26 @@
     border-radius: 2px;
     background: var(--gold);
     transform: rotate(-16deg);
+  }
+  /* The pencilled mark in an upper box's corner, small and faint: ahead in green, behind in red. */
+  .par {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font: 600 9.5px/1 var(--text);
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: 0.01em;
+    color: var(--bad);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+  .par.up {
+    color: var(--good);
+  }
+  /* With a mark in the corner, the number steps aside a little (six columns leave about 40 px). */
+  .marked .v,
+  .marked .n {
+    translate: -4px 3px;
   }
   .cand {
     position: absolute;

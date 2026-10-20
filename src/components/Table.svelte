@@ -408,8 +408,14 @@
     }
   }
 
+  /* Sticky (it never moves: the table doesn't scroll) and solid: iOS 26's installed web apps blur
+     the top edge and take the page's colour for the status bar unless a full-width fixed or sticky
+     box of one colour sits there (the user's iPhone, 2026-10-20). The start page's bar is the same. */
   .band {
     grid-area: band;
+    position: sticky;
+    top: 0;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 12px;
