@@ -3,7 +3,7 @@
 // checks the ranges (the runtime image carries no vendor files).
 
 /** How many choices each part has: the token emblem's (tests/avatar.test.mjs checks they match). */
-export const AVATAR_PARTS = Object.freeze([8, 8, 16]);
+export const AVATAR_PARTS = Object.freeze([14, 14, 24]);
 
 /** A valid avatar from whatever came in, or a random one. */
 export function cleanAvatar(raw, random = Math.random) {
