@@ -300,6 +300,13 @@ button {
   height: 24px;
 }
 
+/* During a game the page never bounces (the table fills the screen and scrolls only inside the block). */
+:root:has(main.playing),
+:root:has(main.playing) body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   :root[data-scrolling] main {
     pointer-events: none;

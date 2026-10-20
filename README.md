@@ -36,13 +36,17 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
   dice line up on the rail's row (`DiceTable.fold`); the canvas keeps the open table's height and the
   tray clips it, so the drawing never resizes. On a tall table the view keeps its width (the dice their
   size) and sees deeper. A wide screen has the block beside the dice and never folds.
+- **The page holds still while playing:** the document doesn't scroll or bounce, a touchmove on the
+  table is claimed (iOS otherwise pulled the whole app), except in the block and the players' row,
+  and a drag on the folded strip opens the table.
 - **Safe keeping:** a press that starts on a die only keeps it, however long, unless it drags 28 px; a
   hand let go before it has travelled 40 px puts the dice back instead of throwing them. A safe zone
   in front of the rail's bar keeps a die against the back wall from reaching over it.
 - **Pencil marks** (a device setting, Settings → "Plus und Minus oben", off by default): each written
-  upper box shows, small in its corner, how far it is above or below three of its number ("+4",
-  "−3"), and the upper sum shows where the column stands for the 63, as the user pencilled them on the
-  paper block.
+  upper box shows, small beside its centred number, how far it is above or below three of its number
+  ("+4", "−3"), and the upper sum shows where the column stands for the 63, as the user pencilled them
+  on the paper block. Where a column is too narrow for that (six games on a phone), the mark sits
+  small in the cell's top corner.
 - **Writing:** a tap on a box in pencil chooses it; the gold ✓ bubble beside it, or a second tap,
   writes it (a crossed-out box shows its line, no 0). A tap elsewhere in the block, ×, or the next
   throw lets it go.

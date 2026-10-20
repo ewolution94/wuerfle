@@ -51,6 +51,15 @@
   const signed = (d: number) => (d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '');
   const par = (box: BoxId, v: number) => signed(v - 3 * face[box]!);
   /** The upper boxes written so far in a column, against three of each: where it stands for the 63. */
+  /**
+   * Whether a mark fits beside its number (which stays centred) in a column this wide; if not, it
+   * goes small into the cell's top corner. Widths measured in WebKit: Young Serif digits 9.2 px at
+   * 17 px (8.8 at the sum's 15.5), a crossed-out box's line 22 px, Karla's marks about 3.6 px a glyph.
+   */
+  let blockW = $state(0);
+  const colW = $derived(blockW > 0 ? (blockW - 120) / columns.length : 120);
+  const beside = (numW: number, mark: string) => numW / 2 + 3 + 3.6 * (mark.length + 1) <= colW / 2 - 2;
+  const boxW = (v: number) => (v === 0 ? 22 : String(v).length * 9.2);
   const standing = (g: number) => {
     const written = UPPER.filter((b) => boxes[g]?.[b] !== undefined);
     return written.length && written.length < 6 ? written.reduce((n, b) => n + boxes[g][b]! - 3 * face[b]!, 0) : null;
@@ -129,6 +138,7 @@
   role="region"
   aria-label={t('gameCol')}
   bind:this={blockEl}
+  bind:clientWidth={blockW}
   onclick={onblockclick}
   onkeydown={(e) => e.key === 'Escape' && ondrop?.()}
   onscroll={() => open && place(false)}
@@ -155,10 +165,13 @@
             {@const v = boxes[g]?.[box]}
             {@const pts = can[g]?.[box]}
             {@const m = v !== undefined && prefs.marks && face[box] ? par(box, v) : ''}
-            <td class:cur={live(g)} class:marked={m !== ''}>
+            {@const side = m !== '' && beside(boxW(v!), m)}
+            <td class:cur={live(g)}>
               {#if v !== undefined}
-                <span class="v" class:zero={v === 0}>{v}</span>
-                {#if m}<span class="par" class:up={v > 3 * face[box]!} aria-hidden="true">{m}</span>{/if}
+                <span class="v" class:zero={v === 0}
+                  >{v}{#if side}<span class="par side" class:up={v > 3 * face[box]!} aria-hidden="true">{m}</span>{/if}</span
+                >
+                {#if m && !side}<span class="par corner" class:up={v > 3 * face[box]!} aria-hidden="true">{m}</span>{/if}
               {:else if pts !== undefined}
                 {@const n = pts}
                 <button
@@ -182,8 +195,11 @@
           {#each columns as g (g)}
             {@const v = pick(g)}
             {@const m = marks && prefs.marks ? standing(g) : null}
-            <td class:cur={live(g)} class:marked={Boolean(m)}
-              >{#if v !== null}<span class="n">{v}</span>{/if}{#if m}<span class="par" class:up={m > 0} aria-hidden="true">{signed(m)}</span>{/if}</td
+            {@const side = Boolean(m) && v !== null && beside(String(v).length * 8.8, signed(m!))}
+            <td class:cur={live(g)}
+              >{#if v !== null}<span class="n"
+                  >{v}{#if m && side}<span class="par side" class:up={m > 0} aria-hidden="true">{signed(m)}</span>{/if}</span
+                >{/if}{#if m && !side}<span class="par corner" class:up={m > 0} aria-hidden="true">{signed(m)}</span>{/if}</td
             >
           {/each}
         </tr>
@@ -323,25 +339,40 @@
     background: var(--gold);
     transform: rotate(-16deg);
   }
-  /* The pencilled mark in an upper box's corner, small and faint: ahead in green, behind in red. */
+  /* The pencilled mark, small and faint: ahead in green, behind in red. Beside the number, which
+     stays centred (the user, 2026-10-20); where the column is too narrow, small in the cell's top
+     corner, above the number. */
   .par {
     position: absolute;
-    top: 2px;
-    right: 2px;
     font: 600 9.5px/1 var(--text);
     font-variant-numeric: tabular-nums lining-nums;
     letter-spacing: 0.01em;
     color: var(--bad);
     opacity: 0.75;
+    white-space: nowrap;
     pointer-events: none;
   }
   .par.up {
     color: var(--good);
   }
-  /* With a mark in the corner, the number steps aside a little (six columns leave about 40 px). */
-  .marked .v,
-  .marked .n {
-    translate: -4px 3px;
+  .par.side {
+    left: 100%;
+    top: 50%;
+    margin-left: 3px;
+    translate: 0 -50%;
+  }
+  /* A crossed-out box's line reaches 6 px past its 0. */
+  .zero .par.side {
+    margin-left: 9px;
+  }
+  .par.corner {
+    top: 2px;
+    right: 2px;
+    font-size: 8.5px;
+  }
+  .v,
+  .n {
+    position: relative;
   }
   .cand {
     position: absolute;

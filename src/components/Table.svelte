@@ -113,6 +113,13 @@
     const ro = new ResizeObserver(measure);
     if (tableEl) ro.observe(tableEl);
     measure();
+    // A drag anywhere on the table but the block and the players' row is the table's: on the iPhone it
+    // pulled the whole app instead (the page's bounce; the user, 2026-10-20). touch-action alone
+    // doesn't stop the bounce in an installed app, a non-passive touchmove does.
+    const claim = (e: TouchEvent) => {
+      if (!(e.target as Element).closest('.sheet-wrap, .who')) e.preventDefault();
+    };
+    tableEl?.addEventListener('touchmove', claim, { passive: false });
     void import('../lib/dice').then(({ DiceTable }) => {
       if (gone) return;
       dice = new DiceTable({
@@ -137,6 +144,7 @@
       gone = true;
       wide.removeEventListener('change', onwide);
       ro.disconnect();
+      tableEl?.removeEventListener('touchmove', claim);
       clearTimeout(unfoldTimer);
       dice?.destroy();
       dice = null;
@@ -256,6 +264,19 @@
     dice?.throwFromEdge();
   }
 
+  /** A drag on the folded strip opens the table (the dice there are lined up, not free to throw). */
+  let stripDrag: { x: number; y: number } | null = null;
+  function stripDown(e: PointerEvent) {
+    stripDrag = folded ? { x: e.clientX, y: e.clientY } : null;
+  }
+  function stripMove(e: PointerEvent) {
+    if (!stripDrag || !folded) return;
+    if (Math.hypot(e.clientX - stripDrag.x, e.clientY - stripDrag.y) > 18) {
+      stripDrag = null;
+      setFold(false);
+    }
+  }
+
   function setFold(on: boolean) {
     if (side) on = false;
     clearTimeout(unfoldTimer);
@@ -324,7 +345,8 @@
     <ewo-settings-button onclick={onsettings}></ewo-settings-button>
   </header>
 
-  <div class="tray">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="tray" onpointerdown={stripDown} onpointermove={stripMove} onpointerup={() => (stripDrag = null)} onpointercancel={() => (stripDrag = null)}>
     <canvas
       bind:this={canvas}
       tabindex="0"
@@ -411,6 +433,13 @@
   /* Sticky (it never moves: the table doesn't scroll) and solid: iOS 26's installed web apps blur
      the top edge and take the page's colour for the status bar unless a full-width fixed or sticky
      box of one colour sits there (the user's iPhone, 2026-10-20). The start page's bar is the same. */
+  /* The parts that never scroll take no pans; the block and the players' row still do. */
+  .band,
+  .tray,
+  .actions,
+  .grand {
+    touch-action: none;
+  }
   .band {
     grid-area: band;
     position: sticky;
