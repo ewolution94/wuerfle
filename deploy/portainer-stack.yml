@@ -5,7 +5,7 @@
 # CI already published. Paste this into Portainer's stack editor (or point a
 # Git-backed stack at this file), never that one.
 #
-# Auto-updates come from the shared Watchtower stack (clinch/deploy/watchtower-stack.yml),
+# Auto-updates come from the shared Watchtower stack (development/.claude/skills/portainer/watchtower/),
 # which only touches containers carrying the label below. With it, a push to `release`
 # is the entire deploy. A deploy ends any table in progress (tables live in memory); solo games
 # live in each page and carry on.
