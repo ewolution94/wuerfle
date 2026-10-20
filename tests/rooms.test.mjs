@@ -120,34 +120,6 @@ test('cleanFling keeps only well-formed numbers in range', () => {
   assert.equal(odd.dice[0].p[0], 1.235, 'rounded');
 });
 
-test('a whole match with bots and people: everyone writes 13 boxes per game, the totals add up', () => {
-  const { rooms, clock } = setup(11);
-  const t = table(rooms, 1);
-  t.act(t.host, 'settings', { games: 2 });
-  t.act(t.host, 'bot', { add: true });
-  t.act(t.host, 'bot', { add: true });
-  t.act(t.host, 'start');
-  const page = t.pages[0];
-  let moves = 0;
-  while (page.view.phase === 'play' && moves < 5000) {
-    const s = page.view.game.state;
-    const seat = s.turn;
-    if (seat <= 1) {
-      personMove(t, page, seat);
-      moves++;
-    } else clock.advance(1000);
-  }
-  assert.equal(page.view.phase, 'final');
-  const g = page.view.game;
-  assert.equal(g.ended, 'done');
-  for (let seat = 0; seat < 4; seat++) {
-    for (let game = 0; game < 2; game++) assert.equal(Object.keys(g.state.boxes[seat][game]).length, 13, `seat ${seat}, game ${game}`);
-    assert.equal(g.totals[seat].total, g.totals[seat].games.reduce((a, b) => a + b, 0));
-  }
-  assert.equal(g.standings[0].place, 1);
-  assert.ok(g.standings[0].total >= g.standings.at(-1).total);
-});
-
 test('bots wait for the dice to land, and show their keeps before they throw the rest', () => {
   let checked = 0;
   for (let seed = 1; seed < 40 && checked < 3; seed++) {

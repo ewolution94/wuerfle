@@ -69,6 +69,15 @@ function playChecked(s, levelOf, randomInt) {
   return moves;
 }
 
+/** A solo game where the seat is to move after `roll` rolls showing `dice`, with `filled` written. */
+function after(dice, roll = 1, filled = {}, variant = 'meister') {
+  const s = createGame({ players: 1, games: 1, rules: { variant } });
+  Object.assign(s.boxes[0][0], filled);
+  s.dice = [...dice];
+  s.roll = roll;
+  return s;
+}
+
 test('the master\'s tables: every multiset of up to five dice, odds that add up', () => {
   const { SETS, FIVES, SUBS, START, P } = _tables;
   assert.equal(SETS.length, 462);
@@ -83,60 +92,6 @@ test('the master\'s tables: every multiset of up to five dice, odds that add up'
   assert.equal(SUBS[/** @type {number} */ (five([0, 0, 0, 0, 0, 5]))].length, 6);
   assert.equal(SUBS[/** @type {number} */ (five([2, 0, 3, 0, 0, 0]))].length, 12);
 });
-
-test('whole matches at every rank, under every variant: legal moves, 13 boxes a column, sums that add up', () => {
-  const tables = [...LEVELS.map((level) => () => level), (/** @type {number} */ seat) => [...LEVELS, 'random'][seat % 4]];
-  let matches = 0;
-  for (const variant of VARIANTS) {
-    for (let seed = 1; seed <= 4; seed++) {
-      for (const players of [1, 2, 4]) {
-        for (const games of [1, 3]) {
-          for (const levelOf of tables) {
-            const randomInt = seeded(seed * 1000 + players * 10 + games);
-            const s = createGame({ players, games, rules: { variant }, first: seed % players });
-            playChecked(s, levelOf, randomInt);
-            matches += 1;
-          }
-        }
-      }
-    }
-  }
-  assert.equal(matches, 3 * 4 * 3 * 2 * 4);
-});
-
-test('a random player keeps to the rules too, under every variant', () => {
-  for (const variant of VARIANTS) {
-    for (let seed = 1; seed <= 20; seed++) playChecked(createGame({ players: 1, games: 1, rules: { variant } }), () => 'random', seeded(seed));
-  }
-});
-
-test('the same state always gives the same move, from a copy too', () => {
-  for (const level of LEVELS) {
-    for (const variant of VARIANTS) {
-      const randomInt = seeded(5);
-      const s = createGame({ players: 2, games: 1, rules: { variant } });
-      for (let k = 0; k < 120 && s.phase !== 'done'; k++) {
-        const move = botMove(s, s.turn, { level });
-        assert.deepEqual(botMove(s, s.turn, { level }), move);
-        assert.deepEqual(botMove(view(s), s.turn, { level }), move);
-        assert.deepEqual(botMove(structuredClone(s), s.turn, { level }), move);
-        act(s, s.turn, /** @type {Record<string, any>} */ (move), { randomInt });
-      }
-    }
-  }
-  const s = createGame({ players: 2, games: 1 });
-  assert.equal(botMove(s, 1), null);
-  assert.deepEqual(botMove(s, 0), { type: 'roll', keep: [false, false, false, false, false] });
-});
-
-/** A solo game where the seat is to move after `roll` rolls showing `dice`, with `filled` written. */
-function after(dice, roll = 1, filled = {}, variant = 'meister') {
-  const s = createGame({ players: 1, games: 1, rules: { variant } });
-  Object.assign(s.boxes[0][0], filled);
-  s.dice = [...dice];
-  s.roll = roll;
-  return s;
-}
 
 test('made hands: every rank writes five alike and a large straight at once', () => {
   for (const level of LEVELS) {
@@ -176,64 +131,3 @@ test('every rank minds the basic rule: no crossing out while the roll fits', () 
     assert.equal(box, 'chance', level);
   }
 });
-
-test(`the master decides within ${MASTER_MS} ms (the slowest of a few hundred decisions)`, () => {
-  /** @type {number[]} */
-  const times = [];
-  for (let g = 0; g < 16; g++) {
-    const randomInt = seeded(900 + g);
-    const s = createGame({ players: 1, games: 1, rules: { variant: VARIANTS[g % 3] } });
-    while (s.phase !== 'done') {
-      const searching = s.roll === 1 || s.roll === 2;
-      const t0 = now();
-      const move = /** @type {Record<string, any>} */ (botMove(s, 0, { level: 'master' }));
-      if (searching) times.push(now() - t0);
-      act(s, 0, move, { randomInt });
-    }
-  }
-  assert.ok(times.length >= 300, `${times.length} decisions`);
-  const slowest = Math.max(...times);
-  assert.ok(slowest < MASTER_MS, `slowest ${slowest.toFixed(1)} ms`);
-});
-
-/**
- * Average solo scores per rank over `n` games, every rank on the same dice: roll k of round r in
- * game g draws the same five faces for each, the dice not kept taking them in order.
- * @param {string} variant  @param {number} n
- */
-function ladder(variant, n) {
-  /** @type {Record<string, number>} */
-  const sum = { random: 0, apprentice: 0, journeyman: 0, master: 0 };
-  for (let g = 0; g < n; g++) {
-    const r = seeded(4242 + g);
-    const dice = Array.from({ length: 13 }, () => Array.from({ length: 3 }, () => Array.from({ length: 5 }, () => r(6))));
-    for (const rank of Object.keys(sum)) {
-      const s = createGame({ players: 1, games: 1, rules: { variant } });
-      /** @type {number[]} */
-      let pool = [];
-      let at = 0;
-      const randomInt = () => pool[at++];
-      const choose = seeded(g + 1);
-      while (s.phase !== 'done') {
-        const move = /** @type {Record<string, any>} */ (rank === 'random' ? randomMove(s, 0, choose) : botMove(s, 0, { level: rank }));
-        if (move.type === 'roll') {
-          pool = dice[s.round - 1][s.roll];
-          at = 0;
-        }
-        act(s, 0, move, { randomInt });
-      }
-      sum[rank] += sheet(s, 0, 0).total;
-    }
-  }
-  return Object.fromEntries(Object.entries(sum).map(([rank, total]) => [rank, total / n]));
-}
-
-for (const variant of VARIANTS) {
-  test(`the ranks order themselves on the same dice (${variant}): master > journeyman > apprentice > random`, () => {
-    const avg = ladder(variant, 250);
-    const line = Object.entries(avg).map(([r, v]) => `${r} ${v.toFixed(1)}`).join(', ');
-    assert.ok(avg.master > avg.journeyman + 5, line);
-    assert.ok(avg.journeyman > avg.apprentice + 5, line);
-    assert.ok(avg.apprentice > avg.random + 50, line);
-  });
-}

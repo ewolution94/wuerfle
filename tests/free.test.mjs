@@ -67,43 +67,6 @@ test('free with the basic rule: no crossing out while any column takes the dice'
   assert.equal(judgeAll(s, 0)(s.dice)?.game, 1);
 });
 
-test('free: 13 rounds per column in one run, no new game between, every column full at the end', () => {
-  const s = createGame({ players: 2, games: 2, rules: { free: true } });
-  const random = seeded(7);
-  let games = 0;
-  let turns = 0;
-  while (s.phase === 'turn') {
-    const seat = s.turn;
-    act(s, seat, { type: 'roll' }, { randomInt: random });
-    const pick = choices(s, seat)[0];
-    const events = act(s, seat, { type: 'score', box: pick.box, game: pick.game });
-    games += events.filter((e) => e.type === 'game').length;
-    turns++;
-  }
-  assert.equal(turns, 2 * 26);
-  assert.equal(games, 0);
-  assert.equal(s.round, 26);
-  for (const seat of [0, 1]) for (const column of s.boxes[seat]) assert.equal(Object.keys(column).length, 13);
-});
-
-test('free: every rank plays a whole three-game match to full columns, writing in more than one', () => {
-  for (const level of LEVELS) {
-    const s = createGame({ players: 2, games: 3, rules: { free: true } });
-    const random = seeded(11);
-    const used = new Set();
-    let turns = 0;
-    while (s.phase === 'turn') {
-      const seat = s.turn;
-      const move = /** @type {import('../server/bots.mjs').Move} */ (botMove(s, seat, { level }));
-      if (move.type === 'score') used.add(move.game);
-      act(s, seat, move, { randomInt: random });
-      assert.ok(++turns < 2 * 39 * 4, level);
-    }
-    for (const seat of [0, 1]) for (const column of s.boxes[seat]) assert.equal(Object.keys(column).length, 13, level);
-    assert.ok(used.size > 1, `${level} wrote in one column only`);
-  }
-});
-
 test('a room keeps the house rule as the host sets it', () => {
   const merged = mergeSettings({ games: 3, clock: 'off', bots: 'journeyman' }, { variant: 'meister', free: false }, { rules: { free: true } });
   assert.equal(merged.rules.free, true);

@@ -95,7 +95,8 @@ judgement at the end, within 150 ms a decision. Solo averages over 2000 games: a
 ```bash
 npm install
 npm run dev          # the whole app on one port (6610): the table server runs inside Vite
-npm test             # the rules, the bots and the rooms (node:test)
+npm test             # the unit tests: the rules, the bots and the rooms on set positions (CI runs these)
+npm run test:sim     # the simulated games: whole matches by bots, the master's timing (local only)
 npm run check        # svelte-check
 npm run build && npm start -- --port 6611    # the production server with the built page
 node tools/qa.mjs http://localhost:6611      # a host, a guest and a bot play a match in WebKit, 390 px
@@ -108,7 +109,7 @@ The QA script borrows Playwright from Folio's checkout next door (`../folio/node
 
 This mirrors Stichle and Stammtisch:
 
-- `ci.yml` runs the typecheck, the tests and the build, then smoke-tests the production server: the
+- `ci.yml` runs the typecheck, the unit tests and the build, then smoke-tests the production server: the
   page and its headers, a table with a guest and a bot, the first throw on the guest's stream with
   its fling, a box refused before the throw and written after.
 - `docker-publish.yml` gates on `ci.yml`, then pushes `ghcr.io/ewolution94/wuerfle:latest` for
