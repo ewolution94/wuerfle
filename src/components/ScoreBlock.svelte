@@ -5,7 +5,10 @@
   gold bubble beside it (or a second tap) writes it, a tap anywhere else in the block or × lets it go
   (the user, after their iPhone test, 2026-10-19: "a confirm floating button ... next to it").
   The header stays while the rows scroll (the table keeps its height: everything else on the screen
-  is fixed, learnings/projects/stichle.md "the table never moves").
+  is fixed, learnings/projects/stichle.md "the table never moves"). From five games on, where the
+  columns would get narrower than MIN_COL, the block scrolls sideways too: the names stay on the
+  left, the current game's column comes into view, and a fade on the right says there's more (the
+  user, 2026-10-20).
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -57,7 +60,12 @@
    * 17 px (8.8 at the sum's 15.5), a crossed-out box's line 22 px, Karla's marks about 3.6 px a glyph.
    */
   let blockW = $state(0);
-  const colW = $derived(blockW > 0 ? (blockW - 120) / columns.length : 120);
+  /** The names' column; the games' columns' least width before the block scrolls sideways. */
+  const LBL = 118;
+  const MIN_COL = 62;
+  const fitW = $derived(blockW > 0 ? (blockW - 3 - LBL) / columns.length : 120);
+  const sideways = $derived(columns.length >= 5 && fitW < MIN_COL);
+  const colW = $derived(sideways ? MIN_COL : fitW);
   const beside = (numW: number, mark: string) => numW / 2 + 3 + 3.6 * (mark.length + 1) <= colW / 2 - 2;
   const boxW = (v: number) => (v === 0 ? 22 : String(v).length * 9.2);
   const standing = (g: number) => {
@@ -101,13 +109,17 @@
       const top = cr.top - br.top + b.scrollTop;
       if (top - head - 6 < b.scrollTop) b.scrollTop = top - head - 6;
       else if (top + cr.height + h + 14 > b.scrollTop + b.clientHeight) b.scrollTop = Math.min(top + cr.height + h + 14 - b.clientHeight, top - head - 6);
+      // Sideways: the box right of the names, and inside the right edge.
+      const x = cr.left - br.left;
+      if (sideways && x < LBL + 4) b.scrollLeft -= LBL + 4 - x;
+      else if (cr.right - br.left > b.clientWidth - 4) b.scrollLeft += cr.right - br.left - b.clientWidth + 4;
       br = b.getBoundingClientRect();
       cr = c.getBoundingClientRect();
     }
     const top = cr.top - br.top + b.scrollTop;
     const cx = cr.left - br.left + b.scrollLeft + cr.width / 2;
     const w = el.offsetWidth;
-    const left = Math.min(Math.max(6, cx - w / 2), b.clientWidth - w - 6);
+    const left = Math.min(Math.max(b.scrollLeft + 6, cx - w / 2), b.scrollLeft + b.clientWidth - w - 6);
     let y = top + cr.height + 8;
     const above = y + h > b.scrollTop + b.clientHeight - 4;
     if (above) y = top - h - 8;
@@ -119,9 +131,48 @@
     place(true);
   });
 
+  // ---- sideways ------------------------------------------------------------------------------
+
+  /** Scrolled all the way right (or not sideways at all): no fade. */
+  let atEnd = $state(true);
+  const edge = () => {
+    const b = blockEl;
+    atEnd = !b || b.scrollLeft + b.clientWidth >= b.scrollWidth - 2;
+  };
+
+  /**
+   * The current game's column in view (half of the one before it shows too); under the house rule
+   * every column is played, so the block stays where it is. A block folded away (no height) can't
+   * scroll, so this runs again when it opens.
+   */
+  function showCurrent() {
+    const b = blockEl;
+    if (!b || !sideways || free || b.clientHeight < 40) return;
+    const x = LBL + st.game * MIN_COL;
+    if (x < b.scrollLeft + LBL || x + MIN_COL > b.scrollLeft + b.clientWidth) b.scrollLeft = Math.max(0, st.game * MIN_COL - MIN_COL / 2);
+    edge();
+  }
+  // At the start of every turn.
+  $effect(() => {
+    void st.game;
+    void st.round;
+    void st.turn;
+    void sideways;
+    void blockEl;
+    showCurrent();
+  });
+
   onMount(() => {
-    // The block grows as the table folds down: the box stays in view, the bubble with it.
-    const ro = new ResizeObserver(() => open && place(true));
+    // The block grows as the table folds down: the box stays in view, the bubble with it; a block
+    // that opens up shows the current column.
+    let tall = false;
+    const ro = new ResizeObserver(() => {
+      if (open) place(true);
+      const now = (blockEl?.clientHeight ?? 0) >= 40;
+      if (now && !tall) showCurrent();
+      tall = now;
+      edge();
+    });
     if (blockEl) ro.observe(blockEl);
     return () => ro.disconnect();
   });
@@ -131,6 +182,7 @@
   }
 </script>
 
+<div class="frame" class:more={sideways && !atEnd}>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="block"
@@ -141,9 +193,12 @@
   bind:clientWidth={blockW}
   onclick={onblockclick}
   onkeydown={(e) => e.key === 'Escape' && ondrop?.()}
-  onscroll={() => open && place(false)}
+  onscroll={() => {
+    if (open) place(false);
+    edge();
+  }}
 >
-  <table>
+  <table class:sideways style:width={sideways ? `${LBL + MIN_COL * columns.length}px` : null}>
     <colgroup>
       <col class="lbl" />
       {#each columns as g (g)}<col />{/each}
@@ -158,8 +213,7 @@
       {#snippet row(box: BoxId)}
         <tr>
           <th scope="row" class="lbl" class:chosen={open?.box === box}>
-            {#if face[box]}<DieGlyph value={face[box]!} />{/if}
-            <span>{label(box)}</span>
+            <span class="name">{#if face[box]}<DieGlyph value={face[box]!} />{/if}<span>{label(box)}</span></span>
           </th>
           {#each columns as g (g)}
             {@const v = boxes[g]?.[box]}
@@ -235,12 +289,34 @@
     </div>
   {/if}
 </div>
+</div>
 
 <style>
+  .frame {
+    position: relative;
+    height: 100%;
+  }
+  /* More columns to the right: the block fades out at its edge. */
+  .frame::after {
+    content: '';
+    position: absolute;
+    top: 1.5px;
+    right: 1.5px;
+    bottom: 1.5px;
+    width: 26px;
+    border-radius: 0 2px 2px 0;
+    background: linear-gradient(to right, rgb(15 23 63 / 0), var(--night-2) 85%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .frame.more::after {
+    opacity: 1;
+  }
   .block {
     position: relative;
     height: 100%;
-    overflow-y: auto;
+    overflow: auto;
     overscroll-behavior: contain;
     background: var(--night-2);
     border: 1.5px solid var(--cobalt-hi);
@@ -303,10 +379,29 @@
     text-overflow: ellipsis;
   }
   tbody th.lbl {
+    border-left: 0;
+  }
+  .name {
     display: flex;
     align-items: center;
     gap: 6px;
-    border-left: 0;
+    min-width: 0;
+  }
+  .name > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Sideways, the names stay on the left over the columns scrolling under them. */
+  .sideways th.lbl,
+  .sideways thead .corner {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: var(--night-2);
+    box-shadow: 1px 0 0 var(--line), 8px 0 10px -8px rgb(0 0 0 / 0.7);
+  }
+  .sideways thead .corner {
+    z-index: 3;
   }
   /* The numbers on their own line, not on the cell's Karla line: their middle is the cell's. */
   td {
@@ -411,7 +506,7 @@
   /* The ✓ for the chosen box: gold, like the throw, pointing at its box. */
   .confirm {
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     display: inline-flex;
     align-items: stretch;
     border-radius: 10px;
@@ -494,6 +589,11 @@
   .sum td,
   .sum th {
     background-color: rgb(143 165 255 / 0.04);
+  }
+  /* A pinned name is opaque: the tint as an image over the block's own colour. */
+  .sideways .sum th.lbl {
+    background-color: var(--night-2);
+    background-image: linear-gradient(rgb(143 165 255 / 0.04), rgb(143 165 255 / 0.04));
   }
   .sum td.cur {
     background-color: rgb(143 165 255 / 0.12);

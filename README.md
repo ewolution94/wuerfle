@@ -45,8 +45,12 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
 - **Pencil marks** (a device setting, Settings → "Plus und Minus oben", off by default): each written
   upper box shows, small beside its centred number, how far it is above or below three of its number
   ("+4", "−3"), and the upper sum shows where the column stands for the 63, as the user pencilled them
-  on the paper block. Where a column is too narrow for that (six games on a phone), the mark sits
-  small in the cell's top corner.
+  on the paper block. Where a column is too narrow for that, the mark sits small in the cell's top
+  corner.
+- **The block scrolls sideways** from five games on, wherever a column would get narrower than 62 px
+  (a phone, the wide layout's side panel): the box names stay pinned on the left, the current game's
+  column comes into view at the start of every turn and when the block opens (not under the house
+  rule, where every column is played), and a fade at the right edge says there are more columns.
 - **Writing:** a tap on a box in pencil chooses it; the gold ✓ bubble beside it, or a second tap,
   writes it (a crossed-out box shows its line, no 0). A tap elsewhere in the block, ×, or the next
   throw lets it go.
