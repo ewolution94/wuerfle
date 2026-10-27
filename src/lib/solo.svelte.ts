@@ -6,6 +6,7 @@
 
 import { act, createGame, standings, totals, view as ruleView } from '../../server/rules.mjs';
 import { botMove } from '../../server/bots.mjs';
+import { cryptoWord, fairInt } from '../../server/fair.mjs';
 import type { BoxId, Level, MatchState, Variant } from './api';
 import { randomAvatar, type Avatar } from './avatar';
 import type { Fling, Throw } from './dice';
@@ -44,14 +45,8 @@ interface Saved {
   id: string;
 }
 
-/** A fair die: a random integer below n from the browser's crypto, without modulo bias. */
-function randomInt(n: number) {
-  const a = new Uint32Array(1);
-  const limit = Math.floor(0x100000000 / n) * n;
-  do crypto.getRandomValues(a);
-  while (a[0] >= limit);
-  return a[0] % n;
-}
+/** A fair die: a random integer below n from the browser's crypto, without modulo bias (server/fair.mjs, tested). */
+const randomInt = (n: number) => fairInt(n, cryptoWord);
 
 function read<T>(key: string): T | null {
   try {

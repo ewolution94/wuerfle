@@ -27,6 +27,12 @@ Würfle too, so the app never uses the trademarked names of the boxed games.
   the server rolled (opposite faces still add up to seven). The thrower's page sends where its dice
   left the hand (the "fling"); every other page replays the same throw from there. The server never
   takes a number from a page.
+- **Fair dice:** the numbers are drawn before the throw, from crypto randomness, exactly uniform: at a
+  table the server's `node:crypto` `randomInt`, alone the page's `crypto.getRandomValues` through
+  `server/fair.mjs` (a word past the last full multiple of six is drawn again instead of scaled, so
+  every face owns the same share). The throw, the fling and the relabelling only show them; the seat
+  order's shuffle uses the same source. `npm test` checks the rejection and a seeded spread;
+  `npm run test:sim` rolls a million dice on each real source, every position of a roll included.
 - **Keeping:** a tap puts a die on the rail at the top; everyone sees it there before the next throw
   (the `hold` action). Bots do the same, so their keeps show for a moment before they throw.
 - **The table folds** (on a phone, `src/components/Table.svelte`): open, it takes all the room above the
@@ -96,7 +102,7 @@ judgement at the end, within 150 ms a decision. Solo averages over 2000 games: a
 npm install
 npm run dev          # the whole app on one port (6610): the table server runs inside Vite
 npm test             # the unit tests: the rules, the bots and the rooms on set positions (CI runs these)
-npm run test:sim     # the simulated games: whole matches by bots, the master's timing (local only)
+npm run test:sim     # the simulated games: whole matches by bots, the master's timing, a million dice per source (local only)
 npm run check        # svelte-check
 npm run build && npm start -- --port 6611    # the production server with the built page
 node tools/qa.mjs http://localhost:6611      # a host, a guest and a bot play a match in WebKit, 390 px
@@ -136,6 +142,7 @@ server/
   rooms.mjs      tables with a code, seats, the host, bots, the clock, the throws and keeps
   rules.mjs      the game as a pure state machine (also run by the page for games alone)
   bots.mjs       the three ranks
+  fair.mjs       fair dice from crypto words, for games alone (the server uses node:crypto's randomInt)
   census.mjs     forwards /_e and /_e.js to Census
 src/
   App.svelte     the routes: the start, /solo, /KXPT
