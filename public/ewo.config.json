@@ -1,0 +1,8 @@
+{
+  "app": "wuerfle",
+  "version": 1,
+  "settings": {
+    "lang": { "family": true, "default": "de" },
+    "sounds": { "family": true }
+  }
+}

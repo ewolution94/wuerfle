@@ -1,16 +1,22 @@
 // Sounds, made on the spot with Web Audio: no files, no third parties. Off by default (the family's
-// rule since Stichle, 2026-10-12), switched on per device in Settings (`wuerfle:sound`). A browser
-// only plays sound after a tap, so the context starts on the first pointer or key press. On a call
-// each device plays its own. From Stammtisch's sound.svelte.ts.
+// rule since Stichle, 2026-10-12), switched on per device in Settings (`wuerfle:sound`); a device
+// that hasn't switched them starts from Dashboard's sounds (#ewo-config, src/lib/defaults.ts). A
+// browser only plays sound after a tap, so the context starts on the first pointer or key press. On
+// a call each device plays its own. From Stammtisch's sound.svelte.ts.
+
+import { readConfig } from '../../vendor/ewo/elements/config-client.js';
+import { soundsOn } from './defaults';
 
 const KEY = 'wuerfle:sound';
 
 function stored() {
+  let own: string | null = null;
   try {
-    return localStorage.getItem(KEY) === 'on';
+    own = localStorage.getItem(KEY);
   } catch {
-    return false;
+    // storage blocked: the default
   }
+  return soundsOn(own, readConfig().sounds);
 }
 
 export const sound = $state({ on: stored() });

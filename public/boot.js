@@ -1,12 +1,20 @@
-// Applies the saved language before first paint (the family's key `ewo:lang`). Würfle speaks German
-// first: no key means Deutsch, and System is saved as 'system'. Würfle is dark only (the block at
-// night), so a saved theme is left alone.
-// Keep in step with src/lib/i18n.svelte.ts (storedChoice, systemLang).
+// Applies the language before first paint: the one saved on this device (the family's key
+// `ewo:lang`; Default saves nothing; an older pick of System, saved as 'system', follows the browser), else Dashboard's (#ewo-config,
+// which the server puts first in <head>), else Deutsch: Würfle speaks German first. Würfle is dark
+// only (the block at night), so a saved theme is left alone.
+// Keep in step with src/lib/i18n.svelte.ts (systemLang) and src/lib/defaults.ts.
+var ewoConfig = {};
 try {
-  var lang = localStorage.getItem('ewo:lang');
-  if (lang !== 'en' && lang !== 'de' && lang !== 'system') lang = 'de';
+  ewoConfig = JSON.parse(document.getElementById('ewo-config').textContent) || {};
+} catch (e) {}
+try {
+  var lang;
+  try {
+    lang = localStorage.getItem('ewo:lang');
+  } catch (e) {}
+  if (lang !== 'en' && lang !== 'de' && lang !== 'system') lang = ewoConfig.lang === 'en' || ewoConfig.lang === 'de' ? ewoConfig.lang : 'de';
   if (lang === 'system') {
-    // System: the first of the browser's languages the game speaks, English otherwise.
+    // An older System: the first of the browser's languages the game speaks, English otherwise.
     var tags = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
     lang = 'en';
     for (var j = 0; j < tags.length; j++) {

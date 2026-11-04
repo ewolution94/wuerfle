@@ -10,7 +10,7 @@
   import GuideRow from './GuideRow.svelte';
   import { themeShift } from '../../vendor/ewo/elements/theme-shift.js';
   import { ApiError } from '../lib/api';
-  import { errorText, i18n, setLanguage, systemLang, t, type LangChoice } from '../lib/i18n.svelte';
+  import { defaultLang, errorText, i18n, setLanguage, t, type LangChoice } from '../lib/i18n.svelte';
   import { prefs, setHint, setMarks } from '../lib/prefs.svelte';
   import type { Room } from '../lib/room.svelte';
   import { play, setSound, sound } from '../lib/sound.svelte';
@@ -73,7 +73,7 @@
 
   function pickLanguage(next: LangChoice) {
     if (next === i18n.choice) return;
-    const shows = next === 'system' ? systemLang() : next;
+    const shows = next === 'system' ? defaultLang() : next;
     if (shows === i18n.lang) setLanguage(next);
     else themeShift(() => setLanguage(next));
   }

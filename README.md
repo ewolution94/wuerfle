@@ -131,6 +131,7 @@ This mirrors Stichle and Stammtisch:
 | `PORT` / `--port` | `8080` | Listen port |
 | `HOST` | `0.0.0.0` | Listen address |
 | `WUERFLE_CENSUS` | off | Census's ingest origin, `http://census:4901` on the NAS |
+| `DASHBOARD_URL` | off | Dashboard's apps' port, `http://dashboard:8081` on the NAS: the language and sounds a device that hasn't picked starts from (Würfle's own German, or one set for Würfle; the family's sounds). Off or down: the built-in ones, as before |
 | `WUERFLE_MASTER_MS` | `150` | The master bot's time per decision (for the ladder) |
 
 ## Project layout

@@ -1,27 +1,28 @@
-// German and English. The choice lives in Settings (General → Language): System follows the
-// browser's languages, Deutsch or English pins one. Würfle speaks German first, whatever the browser
-// says, like Stichle and Stammtisch: its players are the German-speaking afternoon meeting. So with
-// nothing saved it's Deutsch, and System is saved as the word 'system' under `ewo:lang` (the family's
-// key). public/boot.js applies it before first paint. From Stammtisch's i18n.svelte.ts.
+// German and English. The choice lives in Settings (General → Language): Deutsch or English pins
+// one; the first choice, Default, picks none, so the page shows Dashboard's language for Würfle when
+// the owner set one, else Deutsch: Würfle speaks German first, whatever the browser says, like Stichle
+// and Stammtisch, for its players are the German-speaking afternoon meeting. The pick lives under
+// `ewo:lang` (the family's key); Default removes it. An older pick of System, saved as 'system',
+// still follows the browser. The order is in src/lib/defaults.ts; public/boot.js applies it before
+// first paint. From Stammtisch's i18n.svelte.ts.
 //
 // The game's names: the five-alike box is "Würfle" in both languages (the app's own word; the
 // trademarked ones never appear), and the variants are Schmidt's "Meisterschaft" and "Grundregel"
 // and Hasbro's joker rule, named for what they do.
 
-export type Lang = 'de' | 'en';
-export type LangChoice = Lang | 'system';
+import { readConfig } from '../../vendor/ewo/elements/config-client.js';
+import { choiceFor, languageFor, type Lang, type LangChoice } from './defaults';
+
+export type { Lang, LangChoice };
 
 const KEY = 'ewo:lang';
-const DEFAULT: LangChoice = 'de';
 
-function storedChoice(): LangChoice {
+function saved(): string | null {
   try {
-    const stored = localStorage.getItem(KEY);
-    if (stored === 'en' || stored === 'de' || stored === 'system') return stored;
+    return localStorage.getItem(KEY);
   } catch {
-    // storage blocked: the default
+    return null; // storage blocked: the default
   }
-  return DEFAULT;
 }
 
 /** The first of the browser's languages the game speaks, English otherwise (as public/boot.js). */
@@ -33,16 +34,20 @@ export function systemLang(): Lang {
   return 'en';
 }
 
-const choice = storedChoice();
-export const i18n = $state({ choice, lang: choice === 'system' ? systemLang() : choice });
+/** What Default shows: Dashboard's language for Würfle, else Deutsch. */
+export const defaultLang = (): Lang => languageFor(null, readConfig().lang, systemLang);
+
+const stored = saved();
+export const i18n = $state({ choice: choiceFor(stored, systemLang), lang: languageFor(stored, readConfig().lang, systemLang) });
 
 /** Stores a choice and shows the page in that language. */
 export function setLanguage(next: LangChoice) {
   i18n.choice = next;
-  i18n.lang = next === 'system' ? systemLang() : next;
+  i18n.lang = next === 'system' ? defaultLang() : next;
   document.documentElement.lang = i18n.lang;
   try {
-    localStorage.setItem(KEY, next);
+    if (next === 'system') localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, next);
   } catch {
     // not kept
   }
@@ -66,7 +71,7 @@ const STRINGS = {
     settings: 'Einstellungen',
     general: 'Allgemein',
     language: 'Sprache',
-    langSystem: 'System',
+    langSystem: 'Standard',
     sounds: 'Töne',
     soundsHint: 'Töne',
     hintBox: 'Vorschlag im Block',
@@ -291,7 +296,7 @@ const STRINGS = {
     settings: 'Settings',
     general: 'General',
     language: 'Language',
-    langSystem: 'System',
+    langSystem: 'Default',
     sounds: 'Sounds',
     soundsHint: 'Sounds',
     hintBox: 'Suggested box',
